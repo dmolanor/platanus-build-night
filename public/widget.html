@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Peaje</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:#0d0e12; color:#e9e9ee; font:14px/1.4 ui-sans-serif,system-ui,sans-serif; }
+  #deuda { font-size:30px; font-weight:800; padding:10px 12px 0; }
+  #nivel { padding:0 12px; color:#7a7b88; font-size:12px; text-transform:uppercase; letter-spacing:.08em; }
+  ul { list-style:none; margin:8px 0 0; padding:0 12px 12px; }
+  li { padding:6px 0; border-top:1px solid #21222a; font-size:13px; }
+</style>
+</head>
+<body>
+  <div id="deuda">0m</div>
+  <div id="nivel">calm</div>
+  <ul id="lista"></ul>
+<script>
+// TODA la lógica vive aquí dentro: los navegadores estrangulan los timers
+// de la pestaña madre cuando está en segundo plano, que es justo el escenario que importa.
+const token = new URLSearchParams(location.search).get('token');
+const es = new EventSource(`/events?token=${token}`);
+es.onmessage = (e) => {
+  const s = JSON.parse(e.data);
+  document.getElementById('deuda').textContent = Math.round(s.totalWaitedMs / 60000) + 'm';
+  document.getElementById('nivel').textContent = s.level;
+  document.getElementById('lista').innerHTML = s.sessions
+    .map((x) => `<li>${x.repo} · ${x.who} · ${x.status} ${x.reason ? '(' + x.reason + ')' : ''}</li>`)
+    .join('');
+};
+// Render free tier duerme: mantenerlo despierto mientras el widget esté abierto.
+setInterval(() => fetch('/healthz').catch(() => {}), 10 * 60 * 1000);
+</script>
+</body>
+</html>
