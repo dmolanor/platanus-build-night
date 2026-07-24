@@ -11,6 +11,7 @@
 
 <div id="top">
   <span id="conn" class="conn" title="conexión con el servidor"></span>
+  <span id="clock" class="mini clock" hidden></span>
   <button id="mute" class="mini" type="button" aria-pressed="false">voz on</button>
 </div>
 
@@ -22,6 +23,9 @@
     <div id="debt-wrap">
       <div id="debt" class="debt">0</div>
       <div class="debt-label">agent-minutos de deuda</div>
+      <!-- La frase es lo que un jurado entiende en 3 segundos. El número es jerga. -->
+      <div id="debt-human" class="debt-human">Nadie te está esperando.</div>
+      <div id="debt-cost" class="debt-cost" hidden></div>
     </div>
   </div>
   <ul id="sessions" class="sessions"></ul>
@@ -35,6 +39,8 @@
     <div class="toll-tag">Peaje</div>
     <div id="toll-debt" class="toll-debt">0</div>
     <div class="toll-sub">agent-minutos que les debes</div>
+    <!-- Único plano a pantalla completa del pitch: aquí va la tesis, no solo la cifra. -->
+    <div id="toll-human" class="toll-human"></div>
     <section id="permits-toll" class="permits"></section>
     <p id="toll-more" class="permit-more" hidden></p>
     <div id="toll-lock">
@@ -71,6 +77,9 @@ const $ = (id) => document.getElementById(id);
 const S = {
   level: 'calm',
   totalWaitedMs: 0,
+  agentesParados: 0,
+  clock: 1,
+  cost: null,
   sessions: [],
   permits: [],
   view: 'normal',
@@ -378,6 +387,38 @@ function renderDebt() {
   if (node.textContent !== txt) node.textContent = txt;
   $('toll-debt').textContent = txt;
 
+  // Sujeto, verbo, culpable. "3 agent-minutos" no significa nada a los 3 segundos;
+  // "4 agentes llevan 3 minutos esperándote a ti" sí.
+  const n = S.agentesParados;
+  const min = Math.max(1, Math.round(S.totalWaitedMs / 60000 / Math.max(1, n)));
+  const frase = n === 0
+    ? 'Nadie te está esperando. Estás al día.'
+    : `${n} ${n === 1 ? 'agente lleva' : 'agentes llevan'} ${min} ${min === 1 ? 'minuto' : 'minutos'} esperándote a ti.`;
+  if ($('debt-human').textContent !== frase) $('debt-human').textContent = frase;
+
+  const tollFrase = n === 0 ? '' : `${n} ${n === 1 ? 'agente parado' : 'agentes parados'} porque no has vuelto.`;
+  if ($('toll-human').textContent !== tollFrase) $('toll-human').textContent = tollFrase;
+
+  // Esperar no quema tokens: esto es capacidad paralela perdida, y se dice así.
+  const cost = $('debt-cost');
+  if (S.cost && S.cost.idleUsd >= 0.01) {
+    const t = `≈ $${S.cost.idleUsd.toFixed(2)} de capacidad parada (a $${S.cost.rateUsdHour}/h)`;
+    if (cost.textContent !== t) cost.textContent = t;
+    cost.hidden = false;
+  } else {
+    cost.hidden = true;
+  }
+
+  // Si el reloj va acelerado, se dice de frente. Una demo honesta pega más.
+  const clk = $('clock');
+  if (S.clock > 1) {
+    const t = `reloj ${S.clock}×`;
+    if (clk.textContent !== t) clk.textContent = t;
+    clk.hidden = false;
+  } else {
+    clk.hidden = true;
+  }
+
   const mins = Math.floor(S.totalWaitedMs / 60000);
   if (mins > S.lastMinutes && S.lastMinutes >= 0) {
     node.classList.remove('bump');
@@ -509,6 +550,9 @@ function render(snap) {
   S.totalWaitedMs = Number(snap.totalWaitedMs) || 0;
   S.level = ['calm', 'nudge', 'angry', 'toll'].includes(snap.level) ? snap.level : 'calm';
   S.sessions = Array.isArray(snap.sessions) ? snap.sessions : [];
+  S.agentesParados = Number(snap.agentesParados) || 0;
+  S.clock = Number(snap.clock) || 1;
+  S.cost = snap.cost && typeof snap.cost === 'object' ? snap.cost : null;
 
   const incoming = Array.isArray(snap.permits) ? snap.permits : [];
   const now = Date.now();

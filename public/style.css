@@ -135,6 +135,33 @@ body[data-offline="1"] .conn {
   text-transform: uppercase;
   margin-top: 3px;
 }
+/* La frase es lo que se lee en 3 segundos; el número es el que duele después. */
+.debt-human {
+  color: var(--text);
+  font-size: clamp(11px, 3.1vw, 15px);
+  line-height: 1.25;
+  margin-top: 6px;
+  text-wrap: balance;
+}
+.debt-cost {
+  color: var(--dim);
+  font-size: clamp(9px, 2.5vw, 12px);
+  margin-top: 3px;
+  font-variant-numeric: tabular-nums;
+}
+.toll-human {
+  color: #ffd9d9;
+  font-size: clamp(13px, 3.6vw, 20px);
+  margin-top: 10px;
+  text-wrap: balance;
+}
+/* Reloj acelerado: se anuncia, no se esconde. */
+.clock {
+  color: var(--accent);
+  border-color: #4a4530;
+  font-variant-numeric: tabular-nums;
+}
+
 .debt.bump { animation: bump 380ms ease-out; }
 @keyframes bump {
   0%   { transform: scale(1); }

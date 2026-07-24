@@ -119,6 +119,17 @@ app.post('/api/demo/stop', (req, res) => {
   res.json({ ok: true });
 });
 
+// MODO PITCH: acelera el reloj sobre tus sesiones REALES, sin sembrar nada.
+// Un pitch dura 2 minutos y la deuda sube 1 agent-minuto por minuto y agente:
+// sin esto no alcanzas ni el primer umbral. Los datos siguen siendo reales,
+// solo comprimidos — y el widget muestra "reloj 5x" para decirlo de frente.
+app.post('/api/clock', (req, res) => {
+  const t = getToken(tokenOf(req));
+  const speed = Math.max(1, Math.min(60, Number(req.query.speed || 1)));
+  t.demoSpeed = speed;
+  res.json({ ok: true, speed });
+});
+
 app.get('/api/token/new', (req, res) => {
   const token = newToken();
   getToken(token);

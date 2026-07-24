@@ -181,7 +181,7 @@ export function snapshot(token) {
   const now = Date.now();
   if (!t) {
     return {
-      totalWaitedMs: 0, level: 'calm',
+      totalWaitedMs: 0, level: 'calm', agentesParados: 0, clock: 1,
       cost: { idleUsd: 0, rateUsdHour: Number(process.env.PEAJE_DEV_RATE_USD || 60), loopSessions: 0 },
       sessions: [], permits: [], speak: null,
     };
@@ -226,9 +226,16 @@ export function snapshot(token) {
 
   const level = levelFor(total);
 
+  // Agentes realmente parados AHORA. Es la frase que el humano entiende sin traducir.
+  const agentesParados = sessions
+    .filter((s) => s.status === 'waiting' || s.status === 'done')
+    .reduce((n, s) => n + s.blockedAgents, 0);
+
   return {
     totalWaitedMs: total,
     level,
+    agentesParados,
+    clock: t.demoSpeed || 1,
     cost: { idleUsd: Math.round(idleCostUsd * 100) / 100, rateUsdHour, loopSessions },
     sessions,
     permits: [],
