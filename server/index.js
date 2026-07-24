@@ -106,7 +106,10 @@ app.post('/api/toll/complete', (req, res) => {
 // escalada completa. Es el beat del pitch; sin esto la demo aparece ya en peaje.
 app.post('/api/demo/start', (req, res) => {
   const ramp = req.query.ramp === '1';
-  const speed = Number(req.query.speed || process.env.PEAJE_DEMO_SPEED || (ramp ? 20 : 60));
+  // Calibrado con el estado sembrado (6 agentes acumulando): a velocidad 2 la deuda
+  // sube ~0.2 agent-min por segundo real → nudge ~10s, angry ~25s, peaje ~50s.
+  // Ese es el arco del pitch. Velocidades altas lo saltan entero.
+  const speed = Number(req.query.speed || (ramp ? 2 : process.env.PEAJE_DEMO_SPEED || 60));
   startDemo(tokenOf(req), speed, ramp);
   res.json({ ok: true, speed, ramp });
 });
