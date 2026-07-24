@@ -1,5 +1,5 @@
 {
-  "project-name": "<FILL THIS>",
-  "project-oneliner": "<FILL THIS>",
-  "project-description": "<FILL THIS>"
+  "project-name": "Peaje",
+  "project-oneliner": "Tus agentes te están esperando a ti. Peaje mide esa deuda y te deja saldarla sin volver a la terminal.",
+  "project-description": "El recurso escaso ya no es cómputo: es tu atención. Trabajas con varias sesiones de Claude Code y la mitad están paradas esperando que decidas algo, mientras tú estás en el celular sintiéndote productivo. Nadie mide ese costo y no existe un scheduler para tu atención.\n\nPeaje cuenta los agent-minutos que tus agentes pierden esperándote — pesados por agentes realmente parados, contando subagentes — y los muestra en una ventana flotante sobre tu terminal. Cuando la deuda crece, el personaje se pone rojo, te habla, y al pasar el umbral cobra peaje: te bloquea la pantalla.\n\nY el peaje no se paga esperando: se paga desbloqueando. Aprovechando que el hook PermissionRequest de Claude Code acepta que un tercero responda por el usuario, Peaje retiene los permisos pendientes y te deja aprobarlos o denegarlos desde el widget — con una recomendación del modelo sobre cada uno. Al salir recibes un brief que reconstruye qué pasaba en cada sesión y cuál conviene matar por estar en loop. Si nadie decide en 85 segundos, cae al prompt normal: nunca cuelga un agente.\n\nUn token compartido es un equipo: cualquiera puede desbloquear al agente de otro. Se instala pegando un bloque de hooks HTTP en settings.json, sin instalar nada. Todo funciona sin API key gracias a un fallback determinista.\n\nLas otras herramientas informan. Peaje interviene — y no sobre los agentes, sino sobre ti."
 }
