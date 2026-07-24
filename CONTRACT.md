@@ -95,7 +95,7 @@ Si retiene y el humano decide desde el widget, responde `200` con:
 |---|---|---|
 | `POST` | `/hook?token=&who=` | Ingesta. Responde rápido. Único punto que puede retener |
 | `GET` | `/events?token=` | SSE, 1 msg/s |
-| `POST` | `/api/permit/:id` | `{ "decision": "allow" \| "deny" }` → resuelve un permiso retenido |
+| `POST` | `/api/permit/:id?token=` | `{ "decision": "allow" \| "deny" }` → resuelve un permiso retenido. **El token es obligatorio**: sin él, 404 |
 | `GET` | `/api/brief?token=` | Ranking + porqués. Con fallback determinista |
 | `POST` | `/api/toll/complete?token=` | Peaje pagado, resetea la deuda |
 | `POST` | `/api/demo/start?token=` | Estado sembrado + reloj acelerado |
@@ -115,7 +115,23 @@ peso: permission 3.0 · needs_input 2.5 · failed 2.0 · completed 1.5 · idle 1
 Para `advice` de un permiso sin IA: `null` → el widget muestra Permitir/Denegar sin recomendación.
 **La demo nunca puede depender de la red ni de la API key.**
 
-## 7. Reglas de código
+## 7. Seguridad (decidido, no re-litigar)
+
+Aprobar un permiso **ejecuta un comando en la máquina de alguien**. Por eso:
+
+- El **token es la única credencial** y se genera con CSPRNG (`randomBytes`), nunca `Math.random`.
+- Los **ids de permiso son impredecibles** (`randomBytes`), nunca un contador. Un id secuencial
+  dejaría que un extraño adivine el siguiente y lo apruebe.
+- `POST /api/permit/:id` **exige el token** y lo compara con `timingSafeEqual`. Sin él, 404.
+- **Nada de `innerHTML`** con datos del stream: `repo`, `who`, `lastMessage`, `input` y `advice.why`
+  vienen de payloads de hooks, y con token de equipo se renderizan datos de otra persona.
+- **Tradeoff asumido:** el token viaja en la query string porque *es* el mecanismo de onboarding y
+  de equipo. Queda en logs y en el `Referer`. Mitigación: TTL de 2h, token rotable desde la landing,
+  y el servidor ya acepta `Authorization: Bearer` para migrar sin cambios.
+- **Por diseño, quien tiene el token del equipo puede aprobar en la máquina de cualquiera del
+  equipo.** Es la feature, no un bug. Permisos por persona es roadmap.
+
+## 8. Reglas de código
 
 - Feo y funcional. Cero abstracciones. Este código vive 8 horas.
 - Deps permitidas: `express`, `@anthropic-ai/sdk`, `dotenv`. Ninguna más.

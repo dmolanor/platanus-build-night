@@ -1,6 +1,8 @@
 // Estado en memoria, indexado por token. Sin base de datos. TTL 2h.
 // CONTRACT.md §1 y §4 son la fuente de verdad de umbrales y forma de los mensajes.
 
+import { randomBytes } from 'node:crypto';
+
 const TOKEN_TTL_MS = 2 * 60 * 60 * 1000;
 const STALE_MS = 30 * 60 * 1000;
 
@@ -13,8 +15,10 @@ const DEBT_STATUSES = new Set(['waiting', 'done']);
 
 const TOKENS = new Map();
 
+// El token es la ÚNICA credencial y autoriza aprobar comandos en la máquina de alguien.
+// Tiene que ser impredecible: CSPRNG, no Math.random.
 export function newToken() {
-  return 'p_' + Math.random().toString(36).slice(2, 8) + Math.random().toString(36).slice(2, 8);
+  return 'p_' + randomBytes(18).toString('base64url');
 }
 
 export function getToken(token, { create = true } = {}) {

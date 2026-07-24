@@ -22,7 +22,15 @@ app.use((err, req, res, next) => {
 
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
-const tokenOf = (req) => String(req.query.token || '').trim();
+// El token viaja en la query (es el mecanismo de onboarding: compartir la URL = compartir
+// la cola del equipo). También lo aceptamos por header, para poder migrar los hooks a
+// `headers: { Authorization }` sin tocar el servidor. Tradeoff asumido: queda en logs
+// y en el Referer. Mitigación: TTL de 2h y token rotable desde la landing.
+const tokenOf = (req) => {
+  const auth = req.get('authorization');
+  if (auth?.startsWith('Bearer ')) return auth.slice(7).trim();
+  return String(req.query.token || '').trim();
+};
 
 // ── Ingesta de hooks ─────────────────────────────────────────────────────────
 // Responde rápido SIEMPRE, salvo PermissionRequest cuando el humano está ausente.
@@ -75,8 +83,10 @@ app.get('/events', (req, res) => {
 
 // ── Decisión remota sobre un permiso retenido ────────────────────────────────
 app.post('/api/permit/:id', (req, res) => {
-  const ok = permits.resolve(req.params.id, req.body?.decision);
-  res.json({ ok });
+  // Sin el token del equipo no se decide nada: esto ejecuta comandos en la máquina de alguien.
+  const ok = permits.resolve(req.params.id, req.body?.decision, tokenOf(req) || req.body?.token);
+  if (!ok) return res.status(404).json({ ok: false });
+  res.json({ ok: true });
 });
 
 // ── Resto ────────────────────────────────────────────────────────────────────

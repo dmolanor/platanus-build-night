@@ -7,9 +7,10 @@
 // Garantía dura (CONTRACT.md §3): si nadie decide, respondemos vacío y Claude Code muestra
 // el prompt normal. Un timeout del hook es error NO bloqueante. Nunca colgamos un agente.
 
+import { randomBytes, timingSafeEqual } from 'node:crypto';
+
 const HOLD_MS = 85_000; // el hook tiene timeout: 90 → 5s de margen
 const PERMITS = new Map();
-let seq = 0;
 
 export function pendingFor(token, now = Date.now()) {
   const out = [];
@@ -31,7 +32,9 @@ export function pendingFor(token, now = Date.now()) {
 
 // Retiene la petición HTTP del hook. `res` es el response de Express, sin contestar todavía.
 export function hold({ token, who, payload, res, onAdvice }) {
-  const id = 'perm_' + ++seq;
+  // ID impredecible: aprobar un permiso ejecuta un comando en la máquina de alguien.
+  // Un contador secuencial dejaría que un extraño adivine el siguiente y lo apruebe.
+  const id = 'perm_' + randomBytes(12).toString('base64url');
   const input = payload.tool_input || {};
   const p = {
     id,
@@ -75,9 +78,17 @@ export function hold({ token, who, payload, res, onAdvice }) {
   return p;
 }
 
-export function resolve(id, decision) {
+function sameToken(a, b) {
+  const x = Buffer.from(String(a || ''));
+  const y = Buffer.from(String(b || ''));
+  return x.length === y.length && x.length > 0 && timingSafeEqual(x, y);
+}
+
+// `token` es obligatorio: solo quien tiene el token del equipo decide sobre sus permisos.
+export function resolve(id, decision, token) {
   const p = PERMITS.get(id);
   if (!p) return false;
+  if (!sameToken(p.token, token)) return false;
   PERMITS.delete(id);
   clearTimeout(p.timer);
   if (p.res.writableEnded) return false;
