@@ -71,8 +71,9 @@ Si retiene y el humano decide desde el widget, responde `200` con:
   "sessions": [
     { "sessionId": "abc-123", "repo": "buk-api", "who": "diego",
       "status": "waiting", "reason": "needs_input",
-      "since": 1753372800000, "waitedMs": 1320000,
-      "lastMessage": "Necesito confirmar antes de borrar…", "loopCount": 0 }
+      "since": 1753372800000, "waitedMs": 1320000, "blockedAgents": 4,
+      "lastMessage": "Necesito confirmar antes de borrar…", "loopCount": 0,
+      "tasksOpen": 2, "tasksDone": 5, "lastTask": "Arreglar login" }
   ],
   "permits": [
     { "id": "p_1", "sessionId": "abc-123", "repo": "buk-api", "who": "diego",
@@ -85,6 +86,9 @@ Si retiene y el humano decide desde el widget, responde `200` con:
 ```
 
 - `status`: `working` | `waiting` | `done` | `stale`
+- `blockedAgents`: agentes realmente parados por esta sesión = `1 + subagentes activos`.
+  **`totalWaitedMs` suma `waitedMs × blockedAgents`**, no solo el tiempo de reloj: una sesión
+  con 3 subagentes esperándote son 4 agentes parados, y eso es lo que significa "agent-minutos".
 - `reason`: `needs_input` | `permission` | `completed` | `idle` | `failed` | null
 - `speak`: `null` salvo cuando hay algo nuevo que decir. El widget nunca repite lo ya dicho.
 - `advice`: `null` si la IA no respondió a tiempo. El widget muestra los botones igual.

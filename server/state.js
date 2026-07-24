@@ -52,6 +52,7 @@ function getSession(t, sessionId, payload, who) {
       tasksOpen: 0,
       tasksDone: 0,
       lastTask: null,
+      subagents: 0,
       lastEventAt: Date.now(),
     };
     t.sessions.set(sessionId, s);
@@ -114,7 +115,14 @@ export function ingest(token, who, payload, kind) {
       if (payload.last_assistant_message) s.lastMessage = String(payload.last_assistant_message).slice(0, 600);
       break;
 
+    // Los subagentes multiplican la deuda: si una sesión con 3 subagentes te espera,
+    // no tienes 1 agente parado, tienes 4. Eso es lo que significa "agent-minutos".
+    case 'SubagentStart':
+      s.subagents++;
+      break;
+
     case 'SubagentStop':
+      s.subagents = Math.max(0, s.subagents - 1);
       // El subagente terminó pero la sesión principal sigue: no es deuda todavía.
       setStatus(s, 'working', null);
       break;
@@ -179,8 +187,11 @@ export function snapshot(token) {
     const stale = now - s.lastEventAt > STALE_MS;
     const status = stale ? 'stale' : s.status;
     const waitedMs = stale ? 0 : waitedMsFor(t, s, now);
-    total += waitedMs;
+    // Una sesión parada con N subagentes tiene N+1 agentes parados.
+    const blockedAgents = stale ? 0 : 1 + (s.subagents || 0);
+    total += waitedMs * blockedAgents;
     sessions.push({
+      blockedAgents,
       sessionId: s.sessionId,
       repo: s.repo,
       who: s.who,
@@ -205,7 +216,7 @@ const REASON_WEIGHT = { permission: 3.0, needs_input: 2.5, failed: 2.0, complete
 
 export function score(s) {
   const w = REASON_WEIGHT[s.reason] || 1.0;
-  return s.waitedMs * w * (1 + (s.loopCount || 0));
+  return s.waitedMs * (s.blockedAgents || 1) * w * (1 + (s.loopCount || 0));
 }
 
 export function resetDebt(token) {
@@ -224,18 +235,19 @@ export function startDemo(token, speed) {
   const now = Date.now();
   const seed = [
     { sessionId: 'demo-auth', repo: 'buk-api', who: 'diego', status: 'waiting', reason: 'permission',
-      lastMessage: 'Quiero borrar db/migrations/ para regenerarlas desde cero.', loopCount: 0, ageS: 40 },
+      lastMessage: 'Quiero borrar db/migrations/ para regenerarlas desde cero.', loopCount: 0, subagents: 0, ageS: 40 },
     { sessionId: 'demo-checkout', repo: 'buk-api', who: 'diego', status: 'done', reason: 'completed',
-      lastMessage: 'Listo. PR #212 abierto, solo falta que lo confirmes.', loopCount: 0, ageS: 15 },
+      lastMessage: 'Listo. PR #212 abierto, solo falta que lo confirmes.', loopCount: 0, subagents: 0, ageS: 15 },
     { sessionId: 'demo-ui', repo: 'buk-web', who: 'sofía', status: 'waiting', reason: 'needs_input',
-      lastMessage: 'Sigo viendo el mismo error de hidratación. Intento otra vez.', loopCount: 3, ageS: 70 },
+      lastMessage: 'Sigo viendo el mismo error de hidratación. Intento otra vez.', loopCount: 3, subagents: 3, ageS: 70 },
     { sessionId: 'demo-infra', repo: 'buk-infra', who: 'diego', status: 'working', reason: null,
-      lastMessage: null, loopCount: 0, ageS: 5 },
+      lastMessage: null, loopCount: 0, subagents: 0, ageS: 5 },
   ];
   for (const d of seed) {
     t.sessions.set(d.sessionId, {
       sessionId: d.sessionId, repo: d.repo, who: d.who, status: d.status, reason: d.reason,
       since: now - d.ageS * 1000, lastMessage: d.lastMessage, loopCount: d.loopCount,
+      subagents: d.subagents, tasksOpen: 0, tasksDone: 0, lastTask: null,
       recentTools: [], lastEventAt: now,
     });
   }

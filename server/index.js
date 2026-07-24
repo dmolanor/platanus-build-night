@@ -133,6 +133,7 @@ app.get('/api/hooks.json', (req, res) => {
       SessionEnd: fast(),
       Stop: fast(),
       StopFailure: fast(),
+      SubagentStart: fast(),
       SubagentStop: fast(),
       TaskCreated: fast(),
       TaskCompleted: fast(),

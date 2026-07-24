@@ -596,7 +596,7 @@ body[data-permits="1"] .debt { font-size: clamp(24px, 7vw, 44px); }
 
 /* Grupos que se animan (separados para que las animaciones no se pisen) */
 .ch-body-g { transition: transform 600ms cubic-bezier(.3, 1.2, .4, 1); }
-.ch-lids   { transition: transform 400ms ease; transform: translateY(-14px); }
+.ch-lids   { transition: transform 400ms ease; transform: translateY(-24px); }
 .ch-pupils { transition: transform 400ms ease; }
 
 /* calm — verde, redonda, respira lento */
@@ -617,7 +617,7 @@ body[data-permits="1"] .debt { font-size: clamp(24px, 7vw, 44px); }
 .peaje-char[data-level="toll"] .ch-body-g { animation: ch-loom 3.2s ease-in-out infinite; }
 .peaje-char[data-level="toll"] .ch-all { animation: ch-sway 5s ease-in-out infinite; }
 .peaje-char[data-level="toll"] .ch-brow { opacity: 1; }
-.peaje-char[data-level="toll"] .ch-lids { transform: translateY(0); }
+.peaje-char[data-level="toll"] .ch-lids { transform: translateY(5px); }
 .peaje-char[data-level="toll"] .ch-eye { fill: #ffd9d9; }
 .peaje-char[data-level="toll"] .ch-mouth { stroke-width: 5; }
 
