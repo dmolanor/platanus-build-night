@@ -257,7 +257,8 @@ body[data-permits="1"] .debt { font-size: clamp(24px, 7vw, 44px); }
 .empty[hidden] { display: none; }
 
 /* ── VISTA B · tarjeta de permiso ─────────────────────────────────────────── */
-.permits { padding: 0 clamp(8px, 2.5vw, 20px); min-width: 0; }
+/* padding-top: deja libre la esquina del botón de voz. Colapsa solo si está vacío. */
+.permits { padding: 20px clamp(8px, 2.5vw, 20px) 0; min-width: 0; }
 .permits:empty { display: none; }
 
 .permit {

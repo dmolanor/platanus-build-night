@@ -2,37 +2,581 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Peaje</title>
-<style>
-  :root { color-scheme: dark; }
-  * { box-sizing: border-box; }
-  body { margin:0; background:#0d0e12; color:#e9e9ee; font:14px/1.4 ui-sans-serif,system-ui,sans-serif; }
-  #deuda { font-size:30px; font-weight:800; padding:10px 12px 0; }
-  #nivel { padding:0 12px; color:#7a7b88; font-size:12px; text-transform:uppercase; letter-spacing:.08em; }
-  ul { list-style:none; margin:8px 0 0; padding:0 12px 12px; }
-  li { padding:6px 0; border-top:1px solid #21222a; font-size:13px; }
-</style>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="./style.css">
 </head>
-<body>
-  <div id="deuda">0m</div>
-  <div id="nivel">calm</div>
-  <ul id="lista"></ul>
-<script>
-// TODA la lógica vive aquí dentro: los navegadores estrangulan los timers
-// de la pestaña madre cuando está en segundo plano, que es justo el escenario que importa.
-const token = new URLSearchParams(location.search).get('token');
-const es = new EventSource(`/events?token=${token}`);
-es.onmessage = (e) => {
-  const s = JSON.parse(e.data);
-  document.getElementById('deuda').textContent = Math.round(s.totalWaitedMs / 60000) + 'm';
-  document.getElementById('nivel').textContent = s.level;
-  document.getElementById('lista').innerHTML = s.sessions
-    .map((x) => `<li>${x.repo} · ${x.who} · ${x.status} ${x.reason ? '(' + x.reason + ')' : ''}</li>`)
-    .join('');
+<body data-level="calm" data-view="normal" data-permits="0" data-offline="0">
+
+<div id="top">
+  <span id="conn" class="conn" title="conexión con el servidor"></span>
+  <button id="mute" class="mini" type="button" aria-pressed="false">voz on</button>
+</div>
+
+<!-- A · vista normal -->
+<main id="view-normal" class="view">
+  <section id="permits-normal" class="permits"></section>
+  <div id="hero">
+    <div id="ball-normal" class="ball-slot"></div>
+    <div id="debt-wrap">
+      <div id="debt" class="debt">0</div>
+      <div class="debt-label">agent-minutos de deuda</div>
+    </div>
+  </div>
+  <ul id="sessions" class="sessions"></ul>
+  <p id="empty" class="empty" hidden>Nadie te está esperando. Estás al día.</p>
+</main>
+
+<!-- C · vista de peaje -->
+<section id="view-toll" class="view">
+  <div id="ball-toll" class="toll-ball"></div>
+  <div class="toll-inner">
+    <div class="toll-tag">Peaje</div>
+    <div id="toll-debt" class="toll-debt">0</div>
+    <div class="toll-sub">agent-minutos que les debes</div>
+    <section id="permits-toll" class="permits"></section>
+    <p id="toll-more" class="permit-more" hidden></p>
+    <div id="toll-lock">
+      <p id="toll-lock-text" class="toll-lock-text"></p>
+      <div class="lockbar"><i id="lockbar-fill"></i></div>
+      <button id="toll-pay" class="btn big" type="button" disabled>Pagar el peaje</button>
+    </div>
+  </div>
+</section>
+
+<!-- Brief al salir del peaje -->
+<section id="view-brief" class="view">
+  <div class="brief-tag">Brief de vuelta</div>
+  <div id="brief-head" class="brief-head">Cargando…</div>
+  <ul id="brief-list" class="brief-list"></ul>
+  <div class="brief-foot">
+    <button id="brief-close" class="btn ghost" type="button">Volver al widget</button>
+    <span id="brief-src" class="brief-src"></span>
+  </div>
+</section>
+
+<script type="module">
+// TODA la lógica vive aquí dentro. Los navegadores estrangulan los timers de la
+// pestaña madre cuando está en segundo plano, que es justo el escenario que importa.
+import { mount, setLevel } from './character.js';
+
+const TOKEN = new URLSearchParams(location.search).get('token') || '';
+const QT = encodeURIComponent(TOKEN);
+const TOLL_LOCK_MS = 90_000;     // bloqueo cuando no hay permisos que decidir
+const TOLL_GRACE_MS = 30_000;    // tras pagar, no vuelvas a caer al peaje enseguida
+
+const $ = (id) => document.getElementById(id);
+
+const S = {
+  level: 'calm',
+  totalWaitedMs: 0,
+  sessions: [],
+  permits: [],
+  view: 'normal',
+  tollEnteredAt: 0,
+  tollGraceUntil: 0,
+  paying: false,
+  offline: true,
+  muted: localStorage.getItem('peaje_mute') === '1',
+  spoken: new Set(),
+  deadlines: new Map(),   // permitId -> timestamp absoluto de expiración
+  resolved: new Set(),    // permisos que ya decidimos, para no re-pintarlos
+  lastMinutes: -1,
 };
-// Render free tier duerme: mantenerlo despierto mientras el widget esté abierto.
-setInterval(() => fetch('/healthz').catch(() => {}), 10 * 60 * 1000);
+
+// ── Utilidades de formato ───────────────────────────────────────────────────
+function el(tag, cls, text) {
+  const n = document.createElement(tag);
+  if (cls) n.className = cls;
+  if (text != null) n.textContent = text;
+  return n;
+}
+
+function agentMinutes(ms) {
+  const m = Math.max(0, Number(ms) || 0) / 60000;
+  return m >= 10 ? String(Math.round(m)) : m.toFixed(1);
+}
+
+function dur(ms) {
+  const s = Math.max(0, Math.round((Number(ms) || 0) / 1000));
+  if (s < 60) return s + 's';
+  const m = Math.floor(s / 60);
+  if (m < 60) return m + 'm';
+  return Math.floor(m / 60) + 'h ' + String(m % 60).padStart(2, '0') + 'm';
+}
+
+// `repo` de un permiso llega como cwd completo. En 360px de ancho solo cabe el final.
+function basename(p) {
+  const s = String(p == null ? '' : p).replace(/[\\/]+$/, '');
+  if (!s) return 'sin-repo';
+  return s.split(/[\\/]/).pop() || 'sin-repo';
+}
+
+const REASON_ES = {
+  permission: 'pidió permiso',
+  needs_input: 'necesita que decidas',
+  completed: 'terminó, falta que confirmes',
+  idle: 'lleva rato quieta',
+  failed: 'falló',
+};
+
+function motivo(s) {
+  if (s.status === 'stale') return 'sin señales hace rato';
+  if (s.status === 'working') return 'trabajando';
+  return REASON_ES[s.reason] || (s.status === 'done' ? 'terminó' : 'te está esperando');
+}
+
+// ── Voz ─────────────────────────────────────────────────────────────────────
+const synth = typeof window !== 'undefined' ? window.speechSynthesis : null;
+let voice = null;
+
+function pickVoice() {
+  try {
+    const vs = (synth && synth.getVoices && synth.getVoices()) || [];
+    voice =
+      vs.find((v) => /^es[-_]ES/i.test(v.lang)) ||
+      vs.find((v) => /^es[-_]MX/i.test(v.lang)) ||
+      vs.find((v) => /^es/i.test(v.lang)) ||
+      null;
+  } catch (_) { voice = null; }
+}
+try {
+  pickVoice();
+  if (synth && synth.addEventListener) synth.addEventListener('voiceschanged', pickVoice);
+} catch (_) {}
+
+function say(text) {
+  const t = typeof text === 'string' ? text.trim() : '';
+  if (!t || S.spoken.has(t)) return;          // nunca repetir lo ya dicho
+  S.spoken.add(t);
+  if (S.spoken.size > 400) S.spoken.clear();
+  if (S.muted || !synth) return;
+  try {
+    const u = new SpeechSynthesisUtterance(t);
+    u.lang = (voice && voice.lang) || 'es-ES';
+    if (voice) u.voice = voice;
+    u.rate = 1.03;
+    u.pitch = 0.95;
+    synth.speak(u);                            // autoplay bloqueado → falla en silencio
+  } catch (_) {}
+}
+
+function paintMute() {
+  $('mute').textContent = S.muted ? 'voz off' : 'voz on';
+  $('mute').setAttribute('aria-pressed', S.muted ? 'true' : 'false');
+}
+$('mute').addEventListener('click', () => {
+  S.muted = !S.muted;
+  localStorage.setItem('peaje_mute', S.muted ? '1' : '0');
+  if (S.muted) { try { synth && synth.cancel(); } catch (_) {} }
+  paintMute();
+});
+paintMute();
+
+// ── Listas con reconciliación por clave (sin innerHTML, sin parpadeo) ───────
+function syncList(container, items, keyOf, build) {
+  const map = container._nodes || (container._nodes = new Map());
+  const seen = new Set();
+  let prev = null;
+  for (const item of items) {
+    const k = keyOf(item);
+    seen.add(k);
+    let rec = map.get(k);
+    if (!rec) { rec = build(item); map.set(k, rec); }
+    rec.update(item);
+    const target = prev ? prev.nextSibling : container.firstChild;
+    if (rec.el !== target) container.insertBefore(rec.el, target);
+    prev = rec.el;
+  }
+  for (const [k, rec] of map) {
+    if (!seen.has(k)) { rec.el.remove(); map.delete(k); }
+  }
+}
+
+function clearList(container) {
+  if (container._nodes) container._nodes.clear();
+  container.replaceChildren();
+}
+
+// ── VISTA B · tarjeta de permiso ────────────────────────────────────────────
+function buildPermit() {
+  const root = el('article', 'permit');
+
+  const top = el('div', 'permit-top');
+  const tag = el('span', 'permit-tag', 'PERMISO');
+  const who = el('span', 'permit-who');
+  const clock = el('span', 'permit-clock');
+  top.append(tag, who, clock);
+
+  const tool = el('div', 'permit-tool');
+  const input = el('pre', 'permit-input');
+  const advice = el('div', 'permit-advice');
+  advice.hidden = true;
+
+  const actions = el('div', 'permit-actions');
+  const allow = el('button', 'btn allow', 'Permitir');
+  const deny = el('button', 'btn deny', 'Denegar');
+  allow.type = 'button';
+  deny.type = 'button';
+  actions.append(allow, deny);
+
+  const err = el('div', 'permit-err');
+  err.hidden = true;
+
+  const bar = el('div', 'permit-bar');
+  const fill = el('i');
+  bar.appendChild(fill);
+
+  root.append(top, tool, input, advice, actions, err, bar);
+
+  let id = null;
+
+  async function decide(decision) {
+    if (!id) return;
+    allow.disabled = true;
+    deny.disabled = true;
+    err.hidden = true;
+    try {
+      // El token es obligatorio: aprobar un permiso ejecuta algo en la máquina de alguien.
+      const r = await fetch(`/api/permit/${encodeURIComponent(id)}?token=${QT}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ decision }),
+      });
+      // 404 = el permiso venció y el agente ya cayó al prompt normal. No es un error.
+      const done = r.ok;
+      S.resolved.add(id);
+      S.deadlines.delete(id);
+      root.dataset.gone = '1';
+      const wasToll = S.view === 'toll';
+      setTimeout(() => { dropPermit(id); }, done ? 260 : 60);
+      if (wasToll) payToll();
+    } catch (_) {
+      allow.disabled = false;
+      deny.disabled = false;
+      err.hidden = false;
+      err.textContent = 'Sin conexión. Intenta otra vez.';
+    }
+  }
+
+  allow.addEventListener('click', () => decide('allow'));
+  deny.addEventListener('click', () => decide('deny'));
+
+  function update(p) {
+    id = p.id;
+    root.dataset.permitId = p.id;
+    who.textContent = `${p.who || 'alguien'} · ${basename(p.repo)}`;
+    tool.textContent = p.tool || 'herramienta desconocida';
+    input.textContent = p.input == null || p.input === '' ? '(sin argumentos)' : String(p.input);
+
+    const a = p.advice;
+    if (a && (a.verdict === 'deny' || a.verdict === 'allow')) {
+      advice.hidden = false;
+      advice.className = 'permit-advice ' + a.verdict;
+      advice.replaceChildren(
+        el('b', null, a.verdict === 'deny' ? 'IA recomienda DENEGAR' : 'IA recomienda PERMITIR'),
+        document.createTextNode(a.why ? ' — ' + a.why : ''),
+      );
+    } else {
+      advice.hidden = true;
+      advice.replaceChildren();
+    }
+    tickPermit(root, p.id);
+  }
+
+  return { el: root, update };
+}
+
+// Cuenta regresiva local: el servidor manda expiresInMs 1 vez por segundo,
+// esto lo interpola para que la barra se vea drenar de verdad.
+function tickPermit(root, id) {
+  const deadline = S.deadlines.get(id);
+  if (!deadline) return;
+  const left = Math.max(0, deadline - Date.now());
+  const pct = Math.max(0, Math.min(100, (left / 85000) * 100));
+  const fill = root.querySelector('.permit-bar > i');
+  if (fill) fill.style.width = pct.toFixed(1) + '%';
+  const clock = root.querySelector('.permit-clock');
+  if (clock) clock.textContent = Math.ceil(left / 1000) + 's';
+  root.dataset.urgent = left <= 15000 ? '1' : '0';
+}
+
+function dropPermit(id) {
+  S.deadlines.delete(id);
+  S.permits = S.permits.filter((p) => p.id !== id);
+  renderPermits();
+  applyPermitFlag();
+}
+
+function activePermits() {
+  const now = Date.now();
+  return S.permits.filter((p) => {
+    if (S.resolved.has(p.id)) return false;
+    const d = S.deadlines.get(p.id);
+    return d == null || d > now;
+  });
+}
+
+function renderPermits() {
+  const list = activePermits();
+  const inToll = S.view === 'toll';
+  // En el peaje la salida es decidir EL PRIMERO: no ofrecemos alternativas.
+  const shown = inToll ? list.slice(0, 1) : list;
+
+  const more = $('toll-more');
+  if (inToll) {
+    clearList($('permits-normal'));
+    syncList($('permits-toll'), shown, (p) => p.id, buildPermit);
+    more.hidden = list.length <= 1;
+    more.textContent = list.length > 1 ? `y ${list.length - 1} permiso(s) más en la cola` : '';
+  } else {
+    clearList($('permits-toll'));
+    more.hidden = true;
+    syncList($('permits-normal'), shown, (p) => p.id, buildPermit);
+  }
+}
+
+// ── VISTA A · sesiones ──────────────────────────────────────────────────────
+function buildSession() {
+  const root = el('li', 'sess');
+  const dot = el('span', 'dot');
+  const head = el('div', 'sess-head');
+  const repo = el('span', 'sess-repo');
+  const who = el('span', 'sess-who');
+  head.append(repo, who);
+  const time = el('span', 'sess-time');
+  const why = el('div', 'sess-why');
+  const msg = el('div', 'sess-msg');
+  const loop = el('span', 'loop', 'se está dando vueltas');
+  loop.hidden = true;
+  root.append(dot, head, time, why, msg, loop);
+
+  function update(s) {
+    root.dataset.status = s.status || 'working';
+    repo.textContent = basename(s.repo);
+    who.textContent = s.who ? '· ' + s.who : '';
+    time.textContent = s.waitedMs > 0 ? dur(s.waitedMs) : '—';
+    const tarea = s.lastTask ? ' · ' + s.lastTask : '';
+    why.textContent = motivo(s) + tarea;
+    msg.textContent = s.lastMessage ? String(s.lastMessage) : '';
+    loop.hidden = !(Number(s.loopCount) >= 1);
+  }
+
+  return { el: root, update };
+}
+
+function renderSessions() {
+  syncList($('sessions'), S.sessions, (s) => s.sessionId, buildSession);
+  $('empty').hidden = S.sessions.length > 0;
+}
+
+// ── Deuda ───────────────────────────────────────────────────────────────────
+function renderDebt() {
+  const txt = agentMinutes(S.totalWaitedMs);
+  const node = $('debt');
+  if (node.textContent !== txt) node.textContent = txt;
+  $('toll-debt').textContent = txt;
+
+  const mins = Math.floor(S.totalWaitedMs / 60000);
+  if (mins > S.lastMinutes && S.lastMinutes >= 0) {
+    node.classList.remove('bump');
+    void node.offsetWidth;   // reinicia la animación
+    node.classList.add('bump');
+  }
+  S.lastMinutes = mins;
+}
+
+function applyPermitFlag() {
+  document.body.dataset.permits = activePermits().length > 0 ? '1' : '0';
+}
+
+function setView(view) {
+  if (S.view === view) return;
+  S.view = view;
+  document.body.dataset.view = view;
+  renderPermits();
+}
+
+// ── VISTA C · peaje ─────────────────────────────────────────────────────────
+function enterToll() {
+  S.tollEnteredAt = Date.now();
+  setView('toll');
+  say('Peaje. Les debes ' + Math.round(S.totalWaitedMs / 60000) + ' agent-minutos.');
+}
+
+function renderTollLock() {
+  if (S.view !== 'toll') return;
+  const hayPermisos = activePermits().length > 0;
+  const lock = $('toll-lock');
+  lock.hidden = hayPermisos;   // con un permiso encima, la salida es decidirlo
+  if (hayPermisos) return;
+
+  const left = Math.max(0, S.tollEnteredAt + TOLL_LOCK_MS - Date.now());
+  const listo = left <= 0;
+  const pct = ((TOLL_LOCK_MS - left) / TOLL_LOCK_MS) * 100;
+  $('lockbar-fill').style.width = Math.min(100, Math.max(0, pct)).toFixed(1) + '%';
+
+  const txt = $('toll-lock-text');
+  if (listo) {
+    txt.textContent = 'Peaje cumplido. Cóbrate el brief de lo que estaba pasando.';
+  } else {
+    txt.replaceChildren(
+      document.createTextNode('No hay permisos que decidir. El peaje se paga con tiempo: '),
+      el('b', null, Math.ceil(left / 1000) + 's'),
+      document.createTextNode('.'),
+    );
+  }
+  const btn = $('toll-pay');
+  btn.disabled = !listo || S.paying;
+  btn.textContent = S.paying ? 'Saliendo…' : listo ? 'Pagar el peaje' : 'Espera…';
+}
+
+async function payToll() {
+  if (S.paying) return;
+  S.paying = true;
+  S.tollGraceUntil = Date.now() + TOLL_GRACE_MS;
+  setView('brief');
+  $('brief-head').textContent = 'Reconstruyendo qué estaba pasando…';
+  clearList($('brief-list'));
+  $('brief-src').textContent = '';
+
+  // El brief se pide ANTES de resetear: /api/toll/complete pone since=now en todas
+  // las sesiones, así que después del reset el ranking sale con "1 min" en todo y
+  // pierde justo lo que lo hace útil. Ambas llamadas se hacen igual, en este orden.
+  let brief = null;
+  try {
+    const r = await fetch(`/api/brief?token=${QT}`);
+    brief = await r.json();
+  } catch (_) {}
+
+  try {
+    await fetch(`/api/toll/complete?token=${QT}`, { method: 'POST' });
+  } catch (_) {}
+
+  renderBrief(brief);
+  S.paying = false;
+  S.tollGraceUntil = Date.now() + TOLL_GRACE_MS;
+}
+
+$('toll-pay').addEventListener('click', payToll);
+
+// ── Brief ───────────────────────────────────────────────────────────────────
+function buildBriefItem() {
+  const root = el('li', 'brief-item');
+  const rank = el('span', 'brief-rank');
+  const who = el('div', 'brief-who');
+  const whoRepo = el('b');
+  const whoRest = el('span');
+  who.append(whoRepo, whoRest);
+  const why = el('div', 'brief-why');
+  const action = el('div', 'brief-action');
+  root.append(rank, who, why, action);
+
+  function update(item) {
+    rank.textContent = String(item._i);
+    whoRepo.textContent = basename(item.repo);
+    whoRest.textContent = ` · ${item.who || 'alguien'} · ${item.minutes != null ? item.minutes + ' min' : '—'}`;
+    why.textContent = item.why ? String(item.why) : 'esperando';
+    action.textContent = item.action ? String(item.action) : 'Ve a esta.';
+  }
+
+  return { el: root, update };
+}
+
+function renderBrief(brief) {
+  const b = brief && typeof brief === 'object' ? brief : {};
+  const items = Array.isArray(b.items) ? b.items : [];
+  $('brief-head').textContent = b.headline
+    ? String(b.headline)
+    : items.length
+      ? 'Esto es lo que te espera.'
+      : 'No pude cargar el brief, pero la deuda quedó saldada.';
+  $('brief-src').textContent = b.source ? 'fuente: ' + String(b.source) : '';
+  const withIndex = items.map((it, i) => Object.assign({ _i: i + 1 }, it));
+  syncList($('brief-list'), withIndex, (it) => it.sessionId || 'i' + it._i, buildBriefItem);
+  say(b.headline ? String(b.headline) : '');
+}
+
+$('brief-close').addEventListener('click', () => {
+  S.tollGraceUntil = Math.max(S.tollGraceUntil, Date.now() + TOLL_GRACE_MS);
+  setView('normal');
+  applyPermitFlag();
+});
+
+// ── Render principal ────────────────────────────────────────────────────────
+function render(snap) {
+  S.totalWaitedMs = Number(snap.totalWaitedMs) || 0;
+  S.level = ['calm', 'nudge', 'angry', 'toll'].includes(snap.level) ? snap.level : 'calm';
+  S.sessions = Array.isArray(snap.sessions) ? snap.sessions : [];
+
+  const incoming = Array.isArray(snap.permits) ? snap.permits : [];
+  const now = Date.now();
+  for (const p of incoming) {
+    const ms = Number(p.expiresInMs);
+    if (Number.isFinite(ms)) S.deadlines.set(p.id, now + Math.max(0, ms));
+  }
+  const live = new Set(incoming.map((p) => p.id));
+  for (const id of [...S.deadlines.keys()]) if (!live.has(id)) S.deadlines.delete(id);
+  for (const id of [...S.resolved]) if (!live.has(id)) S.resolved.delete(id);
+  S.permits = incoming;
+
+  document.body.dataset.level = S.level;
+  setLevel(S.level);
+  applyPermitFlag();
+  renderDebt();
+  renderSessions();
+  renderPermits();
+
+  // Entrada y salida del peaje.
+  if (S.level === 'toll' && S.view === 'normal' && !S.paying && now >= S.tollGraceUntil) {
+    enterToll();
+  } else if (S.level !== 'toll' && S.view === 'toll') {
+    setView('normal');   // la deuda desapareció por otro lado: el peaje ya no aplica
+  }
+  renderTollLock();
+
+  if (typeof snap.speak === 'string') say(snap.speak);
+}
+
+// ── Stream ──────────────────────────────────────────────────────────────────
+function setOffline(v) {
+  if (S.offline === v) return;
+  S.offline = v;
+  document.body.dataset.offline = v ? '1' : '0';
+  $('conn').title = v ? 'sin conexión — reconectando' : 'conectado';
+}
+
+const es = new EventSource(`/events?token=${QT}`);
+es.addEventListener('open', () => setOffline(false));
+es.addEventListener('error', () => setOffline(true));   // EventSource reconecta solo
+es.addEventListener('message', (e) => {
+  setOffline(false);
+  let snap;
+  try { snap = JSON.parse(e.data); } catch (_) { return; }
+  if (!snap || typeof snap !== 'object') return;
+  try { render(snap); } catch (err) { console.error('render', err); }
+});
+
+// ── Relojes locales ─────────────────────────────────────────────────────────
+setInterval(() => {
+  const now = Date.now();
+  for (const [id, deadline] of S.deadlines) {
+    const node = document.querySelector(`.permit[data-permit-id="${CSS.escape(id)}"]`);
+    if (node) tickPermit(node, id);
+    if (deadline <= now) dropPermit(id);   // venció: el agente cae al prompt normal
+  }
+  renderTollLock();
+}, 200);
+
+// El free tier de Render se duerme. Mientras el widget esté abierto, no.
+setInterval(() => { fetch('/healthz').catch(() => {}); }, 10 * 60 * 1000);
+
+// ── Arranque ────────────────────────────────────────────────────────────────
+mount($('ball-normal'));
+mount($('ball-toll'));
+setLevel('calm');
+if (!TOKEN) $('empty').textContent = 'Sin token: abre el widget desde la página principal.';
 </script>
 </body>
 </html>

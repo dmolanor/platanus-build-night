@@ -67,10 +67,14 @@ export function mount(host) {
   face.appendChild(pupils);
 
   // Párpados del color del cuerpo: bajan y dejan los ojos entrecerrados (toll).
-  const lids = node('g', { class: 'ch-lids', 'clip-path': `url(#${clipId})` });
+  // El recorte va en un grupo SIN transform: si viviera en el mismo grupo que se
+  // mueve, el clip se movería con él y los párpados se saldrían de la bola.
+  const lidClip = node('g', { 'clip-path': `url(#${clipId})` });
+  const lids = node('g', { class: 'ch-lids' });
   lids.appendChild(node('rect', { class: 'ch-lid', x: 32, y: 36, width: 26, height: 16, rx: 3 }));
   lids.appendChild(node('rect', { class: 'ch-lid', x: 62, y: 36, width: 26, height: 16, rx: 3 }));
-  face.appendChild(lids);
+  lidClip.appendChild(lids);
+  face.appendChild(lidClip);
 
   const brows = node('g', { class: 'ch-brows' });
   brows.appendChild(node('path', { class: 'ch-brow', d: 'M35 41 L54 47' }));

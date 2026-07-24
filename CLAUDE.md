@@ -18,8 +18,14 @@ Hackathon, 8 horas, un solo entregable desplegado. **Este código vive 8 horas.*
 ## Entorno
 
 - Windows. PowerShell **no soporta `&&`** — usa `;` o el Bash tool.
-- Node 24. Servidor desplegado en Render (URL en `.env` y en el README).
+- Node 24. **Desplegado en https://platanus-build-night.onrender.com**
 - **Verifica siempre contra la URL desplegada, no contra localhost.**
+
+## Verificado en producción (no re-litigar)
+
+- El proxy de Render **aguanta los 85 s** de retención: `200` vacío a los 85.15 s.
+- La recomendación de la IA llega en ~4 s; el brief en ~5 s.
+- Sin `ANTHROPIC_API_KEY` todo sigue funcionando con el fallback determinista.
 
 ## Antes de tocar el SDK de Anthropic
 
