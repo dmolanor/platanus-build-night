@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 
 import { ingest, snapshot, newToken, getToken, startDemo, stopDemo, resetDebt, levelFor, NUDGE_MS } from './state.js';
 import * as permits from './permits.js';
-import { fallbackBrief, fallbackAdvice } from './ai.js';
+import { aiBrief, aiAdvice } from './ai.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -51,13 +51,10 @@ app.post('/hook', (req, res) => {
   const ausente = snap.totalWaitedMs >= NUDGE_MS;
   if (!ausente) return res.status(200).end();
 
-  permits.hold({
-    token,
-    who,
-    payload,
-    res,
-    onAdvice: async (p) => fallbackAdvice(p),
-  });
+  // La recomendación llega después y se adjunta al permiso cuando esté lista.
+  // Los botones aparecen en el widget de inmediato, con o sin ella.
+  const session = snap.sessions.find((s) => s.sessionId === payload.session_id);
+  permits.hold({ token, who, payload, res, onAdvice: (p) => aiAdvice(p, session) });
 });
 
 // ── Stream al widget ─────────────────────────────────────────────────────────
@@ -96,9 +93,8 @@ app.get('/api/state', (req, res) => {
   res.json(snap);
 });
 
-app.get('/api/brief', (req, res) => {
-  const snap = snapshot(tokenOf(req));
-  res.json(fallbackBrief(snap));
+app.get('/api/brief', async (req, res) => {
+  res.json(await aiBrief(snapshot(tokenOf(req))));
 });
 
 app.post('/api/toll/complete', (req, res) => {
