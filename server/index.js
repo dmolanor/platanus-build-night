@@ -148,6 +148,7 @@ app.get('/api/hooks.json', (req, res) => {
     hooks: {
       SessionStart: fast(),
       SessionEnd: fast(),
+      UserPromptSubmit: fast(),
       Stop: fast(),
       StopFailure: fast(),
       SubagentStart: fast(),

@@ -3,8 +3,18 @@
 
 import { randomBytes } from 'node:crypto';
 
-const TOKEN_TTL_MS = 2 * 60 * 60 * 1000;
-const STALE_MS = 30 * 60 * 1000;
+// 12h para que la deuda te espere de un día para otro. El estado vive en memoria,
+// así que un redeploy la borra igual: no prometemos más de lo que damos.
+const TOKEN_TTL_MS = 12 * 60 * 60 * 1000;
+
+// Sin eventos en NINGUNA sesión por este tiempo, no estás distraído: estás fuera
+// (almuerzo, casa, dormido). La deuda se CONGELA —no se borra— y nos callamos.
+// Nadie a quien intervenir en una silla vacía. El peaje te cobra al volver.
+const AWAY_MS = 30 * 60 * 1000;
+
+// Mucho más tarde: la sesión está abandonada de verdad (terminal cerrada, máquina
+// apagada). Ahí sí deja de contar, porque ya no hay nadie esperando.
+const STALE_MS = 4 * 60 * 60 * 1000;
 
 export const NUDGE_MS = 2 * 60 * 1000;
 export const ANGRY_MS = 5 * 60 * 1000;
@@ -100,6 +110,14 @@ export function ingest(token, who, payload, kind) {
       s.recentTools = [];
       break;
 
+    // La señal más limpia de "el humano volvió y está en el teclado".
+    // Sin esto, una sesión donde Claude responde sin usar herramientas se queda
+    // marcada como `done` y acumula deuda fantasma: el número se infla y la
+    // métrica deja de ser defendible.
+    case 'UserPromptSubmit':
+      setStatus(s, 'working', null);
+      break;
+
     case 'PostToolUse': {
       setStatus(s, 'working', null);
       const sig = toolSignature(payload);
@@ -181,18 +199,25 @@ export function snapshot(token) {
   const now = Date.now();
   if (!t) {
     return {
-      totalWaitedMs: 0, level: 'calm', agentesParados: 0, clock: 1,
+      totalWaitedMs: 0, level: 'calm', agentesParados: 0, clock: 1, presence: 'here',
       cost: { idleUsd: 0, rateUsdHour: Number(process.env.PEAJE_DEV_RATE_USD || 60), loopSessions: 0 },
       sessions: [], permits: [], speak: null,
     };
   }
+
+  // ¿Hay alguien en el teclado? Cualquier evento en cualquier sesión cuenta.
+  const lastActivity = t.lastEventAt || 0;
+  const away = now - lastActivity > AWAY_MS;
+  // Estando fuera, el reloj se detiene donde estaba: la deuda queda congelada
+  // esperándote, en vez de crecer toda la noche o borrarse.
+  const clockNow = away ? lastActivity + AWAY_MS : now;
 
   const sessions = [];
   let total = 0;
   for (const s of t.sessions.values()) {
     const stale = now - s.lastEventAt > STALE_MS;
     const status = stale ? 'stale' : s.status;
-    const waitedMs = stale ? 0 : waitedMsFor(t, s, now);
+    const waitedMs = stale ? 0 : waitedMsFor(t, s, clockNow);
     // Una sesión parada con N subagentes tiene N+1 agentes parados.
     const blockedAgents = stale ? 0 : 1 + (s.subagents || 0);
     total += waitedMs * blockedAgents;
@@ -235,11 +260,14 @@ export function snapshot(token) {
     totalWaitedMs: total,
     level,
     agentesParados,
+    presence: away ? 'away' : 'here',
     clock: t.demoSpeed || 1,
     cost: { idleUsd: Math.round(idleCostUsd * 100) / 100, rateUsdHour, loopSessions },
     sessions,
     permits: [],
-    speak: speakFor(t, level, total, sessions),
+    // Estando fuera no hablamos: no hay nadie oyendo, y gritarle a una silla vacía
+    // a las 3am es exactamente lo que haría un dashboard más.
+    speak: away ? null : speakFor(t, level, total, sessions),
   };
 }
 

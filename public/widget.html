@@ -80,6 +80,7 @@ const S = {
   agentesParados: 0,
   clock: 1,
   cost: null,
+  presence: 'here',
   sessions: [],
   permits: [],
   view: 'normal',
@@ -552,6 +553,7 @@ function render(snap) {
   S.sessions = Array.isArray(snap.sessions) ? snap.sessions : [];
   S.agentesParados = Number(snap.agentesParados) || 0;
   S.clock = Number(snap.clock) || 1;
+  S.presence = snap.presence === 'away' ? 'away' : 'here';
   S.cost = snap.cost && typeof snap.cost === 'object' ? snap.cost : null;
 
   const incoming = Array.isArray(snap.permits) ? snap.permits : [];
@@ -573,7 +575,10 @@ function render(snap) {
   renderPermits();
 
   // Entrada y salida del peaje.
-  if (S.level === 'toll' && S.view === 'normal' && !S.paying && now >= S.tollGraceUntil) {
+  // Estando fuera no se cobra peaje: no hay nadie a quien bloquear. La deuda queda
+  // congelada y el peaje salta en cuanto vuelves, que es cuando sirve.
+  if (S.level === 'toll' && S.view === 'normal' && !S.paying && now >= S.tollGraceUntil
+      && S.presence !== 'away') {
     enterToll();
   } else if (S.level !== 'toll' && S.view === 'toll') {
     setView('normal');   // la deuda desapareció por otro lado: el peaje ya no aplica
