@@ -102,10 +102,13 @@ app.post('/api/toll/complete', (req, res) => {
   res.json({ ok: true });
 });
 
+// ?ramp=1 arranca la deuda en cero para que el contador suba en vivo y se vea la
+// escalada completa. Es el beat del pitch; sin esto la demo aparece ya en peaje.
 app.post('/api/demo/start', (req, res) => {
-  const speed = Number(req.query.speed || process.env.PEAJE_DEMO_SPEED || 60);
-  startDemo(tokenOf(req), speed);
-  res.json({ ok: true, speed });
+  const ramp = req.query.ramp === '1';
+  const speed = Number(req.query.speed || process.env.PEAJE_DEMO_SPEED || (ramp ? 20 : 60));
+  startDemo(tokenOf(req), speed, ramp);
+  res.json({ ok: true, speed, ramp });
 });
 
 app.post('/api/demo/stop', (req, res) => {

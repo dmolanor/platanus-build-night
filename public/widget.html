@@ -540,8 +540,10 @@ function render(snap) {
 }
 
 // ── Stream ──────────────────────────────────────────────────────────────────
+// Escritura incondicional a propósito: el estado inicial de S y el del DOM no
+// tienen por qué coincidir, y un guard de "si no cambió, no hagas nada" se comía
+// el primer error (el caso justo en que el punto rojo tiene que aparecer).
 function setOffline(v) {
-  if (S.offline === v) return;
   S.offline = v;
   document.body.dataset.offline = v ? '1' : '0';
   $('conn').title = v ? 'sin conexión — reconectando' : 'conectado';

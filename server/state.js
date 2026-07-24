@@ -179,7 +179,13 @@ export function levelFor(totalWaitedMs) {
 export function snapshot(token) {
   const t = TOKENS.get(token);
   const now = Date.now();
-  if (!t) return { totalWaitedMs: 0, level: 'calm', sessions: [], permits: [], speak: null };
+  if (!t) {
+    return {
+      totalWaitedMs: 0, level: 'calm',
+      cost: { idleUsd: 0, rateUsdHour: Number(process.env.PEAJE_DEV_RATE_USD || 60), loopSessions: 0 },
+      sessions: [], permits: [], speak: null,
+    };
+  }
 
   const sessions = [];
   let total = 0;
@@ -208,7 +214,51 @@ export function snapshot(token) {
   }
 
   sessions.sort((a, b) => score(b) - score(a));
-  return { totalWaitedMs: total, level: levelFor(total), sessions, permits: [], speak: null };
+
+  // Dos costos distintos, y la diferencia importa:
+  //  - Esperar NO quema tokens. Un agente bloqueado cuesta 0. Lo que pierdes es
+  //    capacidad paralela: costo de oportunidad, con el supuesto de tarifa a la vista.
+  //  - Dar vueltas en loop SÍ quema tokens de verdad. Eso es plata literal.
+  // Decir "X dólares de cómputo parado" sería falso y se cae con una pregunta.
+  const rateUsdHour = Number(process.env.PEAJE_DEV_RATE_USD || 60);
+  const idleCostUsd = (total / 3_600_000) * rateUsdHour;
+  const loopSessions = sessions.filter((s) => s.loopCount >= 1).length;
+
+  const level = levelFor(total);
+
+  return {
+    totalWaitedMs: total,
+    level,
+    cost: { idleUsd: Math.round(idleCostUsd * 100) / 100, rateUsdHour, loopSessions },
+    sessions,
+    permits: [],
+    speak: speakFor(t, level, total, sessions),
+  };
+}
+
+// La voz es el escalón de 5–10 min de la escalera, no un extra.
+// El texto se fija al ENTRAR a un nivel y no cambia mientras sigas ahí: así el
+// widget lo dice una vez y no repite. Con token de equipo, todos oyen lo mismo.
+function speakFor(t, level, total, sessions) {
+  if (t.speakLevel === level) return t.speakText || null;
+  t.speakLevel = level;
+
+  if (level === 'calm') {
+    t.speakText = null;
+  } else {
+    const min = Math.round(total / 60000);
+    const parados = sessions
+      .filter((s) => s.status === 'waiting' || s.status === 'done')
+      .reduce((n, s) => n + s.blockedAgents, 0);
+    if (level === 'nudge') {
+      t.speakText = `${parados} agentes llevan ${min} minutos esperándote.`;
+    } else if (level === 'angry') {
+      t.speakText = `${min} agent-minutos parados. Eso lo estás costando tú.`;
+    } else {
+      t.speakText = `Peaje. Les debes ${min} agent-minutos. No sigues hasta saldarlo.`;
+    }
+  }
+  return t.speakText;
 }
 
 // CONTRACT.md §6 — fallback determinista. Se construye ANTES que la IA y nunca se apaga.
@@ -227,7 +277,10 @@ export function resetDebt(token) {
   t.spoken.clear();
 }
 
-export function startDemo(token, speed) {
+// `ramp`: arranca la deuda en cero para que el contador SUBA en vivo y se vea la
+// escalada calm → nudge → angry → toll. Sin esto la demo aparece ya en peaje y se
+// salta el arco entero, que es justo el beat del pitch ("12... 30... 47").
+export function startDemo(token, speed, ramp = false) {
   const t = getToken(token);
   t.demoSpeed = speed;
   t.sessions.clear();
@@ -246,7 +299,7 @@ export function startDemo(token, speed) {
   for (const d of seed) {
     t.sessions.set(d.sessionId, {
       sessionId: d.sessionId, repo: d.repo, who: d.who, status: d.status, reason: d.reason,
-      since: now - d.ageS * 1000, lastMessage: d.lastMessage, loopCount: d.loopCount,
+      since: now - (ramp ? 0 : d.ageS * 1000), lastMessage: d.lastMessage, loopCount: d.loopCount,
       subagents: d.subagents, tasksOpen: 0, tasksDone: 0, lastTask: null,
       recentTools: [], lastEventAt: now,
     });
