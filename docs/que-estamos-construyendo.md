@@ -127,6 +127,14 @@ Tenerlas enunciadas primero es la diferencia entre criterio y hueco.
 5. **Solo funciona con Claude Code.**
 6. **Los repos se emparejan por nombre**, así que dos repos distintos llamados `api` darían falso positivo en colisión.
 7. **El estado vive en memoria:** cada redeploy lo borra.
+8. **Se recibe más de lo que se guarda.** El hook HTTP manda el payload nativo completo y no hay
+   cliente local que lo filtre: el prompt que escribes, el contenido de archivo en un `Write`, el
+   diff de un `Edit`, el comando y su salida en `Bash`, y la respuesta final del modelo. Guardamos
+   una fracción (título 80, prompt 90, mensaje 600, firma de herramienta 120) y no persistimos ni
+   logueamos nada — pero **recibir poco y guardar poco no son lo mismo**, y decir "nunca mando tu
+   código" es falso.
+   → *Enúncialo tú:* "cambiamos minimización de datos por instalación sin instalar nada; un relay
+   local filtraría en el origen y es lo primero del roadmap".
 
 ---
 
@@ -153,5 +161,5 @@ Tenerlas enunciadas primero es la diferencia entre criterio y hueco.
 | ¿No es `dev-checkpoint`? | Tiene 3 estrellas porque hay que acordarse de apretar un atajo. Los hooks disparan solos: no necesito que te acuerdes de nada |
 | ¿Dónde está la IA? | Decidiendo por ti sobre un agente congelado, y reconstruyendo qué pasaba en cada sesión cuando vuelves |
 | ¿Y si se cae la red o la API key? | Fallback determinista en todo. Probado cortando la key |
-| ¿Mandas mi código? | Nunca. Solo eventos de hook, en memoria, sin persistencia |
+| ¿Mandas mi código? | **No digas "nunca".** Los hooks mandan el payload completo, que en un `Write` incluye el contenido del archivo. Guardamos una fracción mínima y no persistimos nada, pero sí lo recibimos. Ver §7.8 |
 | ¿Me bloqueas la máquina? | No, y no pretendo. Ver debilidad #1 |

@@ -88,10 +88,22 @@ cp .env.example .env      # opcional: ANTHROPIC_API_KEY
 npm start                 # http://localhost:7777
 ```
 
-## Privacidad
+## Qué viaja y qué no
 
-Solo se envían **eventos de hook** (herramienta, comando, último mensaje), nunca tu transcript.
-Efímeros, en memoria, sin persistencia, con TTL de 2 h.
+**Nunca sale de tu máquina:** el transcript (solo recibimos su *ruta*; el servidor no puede leer
+tu disco), tu repositorio, tus archivos en reposo, tus credenciales.
+
+**Sí viaja:** los hooks HTTP mandan el payload nativo completo de cada evento, y no hay cliente
+local que lo filtre. Eso incluye el prompt que escribes, el contenido de un archivo en un `Write`,
+el diff de un `Edit`, el comando y su salida en un `Bash`, y la respuesta final del modelo.
+
+**Se guarda una fracción:** título (80 chars), último prompt (90), último mensaje (600) y firmas de
+herramienta (nombre + ruta, 120). El resto se descarta al llegar. Sin persistencia, sin logs, en
+memoria, TTL de 12 h.
+
+> **El tradeoff, dicho de frente:** cambiamos minimización de datos por instalación sin instalar
+> nada. Un relay local podría filtrar en el origen — es justo lo que quitamos para que el
+> onboarding fueran 30 segundos. El modo local es lo primero del roadmap.
 
 ## Qué sigue
 
