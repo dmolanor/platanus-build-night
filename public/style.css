@@ -104,13 +104,27 @@ body[data-offline="1"] .conn {
 .mini[aria-pressed="true"] { color: var(--accent); border-color: #4a4530; }
 
 /* ── VISTA A · normal ─────────────────────────────────────────────────────── */
-#view-normal { overflow-y: auto; overflow-x: hidden; padding: 0 0 8px; }
+#view-normal { overflow: hidden; padding: 0 0 8px; }
 
+/* min-height: 0 es obligatorio: sin él un hijo flex no baja de su altura de
+   contenido y `overflow-y: auto` nunca se activa. */
+#scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-gutter: stable;
+}
+
+/* padding-top libra la barra superior (#top vive en top:4px y mide ~18px). Sin esto
+   la frase "N agentes llevan M minutos esperándote a ti" —que es la promesa entera
+   del producto— se metía por debajo de RELOJ 60x y del botón de voz. */
 #hero {
   display: flex;
   align-items: center;
   gap: clamp(8px, 3vw, 20px);
-  padding: 10px clamp(10px, 3vw, 22px) 6px;
+  padding: 24px clamp(10px, 3vw, 22px) 6px;
   flex: 0 0 auto;
 }
 
