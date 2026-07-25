@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Pings — en cuál de tus agentes estás perdiendo más tiempo</title>
 <meta name="description" content="Mide cuánto llevan tus agentes de Claude Code esperándote a ti, te dice a cuál volver, y te deja destrabar un permiso desde el celular sin volver a la terminal.">
-<link rel="icon" href="data:,">
+<link rel="icon" href="./logo.png">
 <link rel="stylesheet" href="./theme.css">
 <script src="./settings.js"></script>
 <script src="./gh.js"></script>
@@ -37,6 +37,12 @@
     max-width: 1100px; margin: 0 auto; padding: 12px 24px;
     display: flex; align-items: baseline; gap: 14px;
   }
+  /* El logo se recortó con --ink-1 de fondo, el mismo de la barra, así que no lleva
+     recuadro ni borde: se funde y se lee como marca, no como una imagen pegada.
+     `align-self: center` porque .bar-in alinea por baseline y una imagen no tiene.
+     El margen negativo cierra el gap de 14px, que separa demasiado un icono de su
+     propia palabra. */
+  .mark-logo { align-self: center; display: block; flex: none; margin-right: -6px; }
   .mark {
     font-family: var(--font-mono); font-weight: 700; font-size: 14px;
     letter-spacing: .2em; text-transform: uppercase; color: var(--text);
@@ -300,6 +306,7 @@
 
 <header class="bar">
   <div class="bar-in">
+    <img class="mark-logo" src="./logo.png" alt="" width="26" height="26">
     <span class="mark">Pings</span>
     <span class="mark-sub">latencia humana, medida</span>
     <nav class="idx" aria-label="Secciones">
