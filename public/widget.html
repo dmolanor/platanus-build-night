@@ -43,7 +43,7 @@
        la escalada sigue siendo legible. -->
   <div id="bubble" class="bubble" hidden></div>
   <ul id="sessions" class="sessions"></ul>
-  <p id="empty" class="empty" hidden>Nadie te está esperando. Estás al día.</p>
+  <p id="empty" class="empty" hidden>Conecta GitHub desde la página principal y te digo qué issue no tiene a nadie encima.</p>
   <!-- "Estás al día" es un callejón sin salida: te felicita y te deja sin nada que
        hacer. Cuando no hay deuda, lo útil es lo que NADIE empezó. -->
   <section id="libre" class="libre" hidden>
@@ -581,8 +581,12 @@ function renderLibres() {
   const ocioso = S.agentesParados === 0 && !activePermits().length;
   const hay = ocioso && S.libres.length > 0;
   box.hidden = !hay;
-  if (!hay) { clearList($('libre-list')); return; }
-  syncList($('libre-list'), S.libres, (i) => i.repo + '#' + i.numero, buildLibre);
+  if (hay) syncList($('libre-list'), S.libres, (i) => i.repo + '#' + i.numero, buildLibre);
+  else clearList($('libre-list'));
+  // El renglón de vacío depende de si esta sección quedó visible, así que se
+  // repinta acá: renderLibres corre después de renderSessions y también sola,
+  // cuando vuelve la consulta a GitHub.
+  pintarVacio();
 }
 
 function renderSessions() {
@@ -594,7 +598,25 @@ function renderSessions() {
     return { ...s, rank: cuenta ? ++n : 0 };
   });
   syncList($('sessions'), conRank, (s) => s.sessionId, buildSession);
-  $('empty').hidden = S.sessions.length > 0;
+  pintarVacio();
+}
+
+// El hero ya dice "Estás al día" cuando no hay deuda: repetirlo abajo gastaba el
+// cuadro entero —el primero que se ve— en decir dos veces lo mismo. Este renglón
+// solo aparece si no hay NADA que mostrar, y entonces dice cómo conseguirlo.
+function pintarVacio() {
+  const nodo = $('empty');
+  if (!TOKEN) {
+    nodo.textContent = 'Sin token: abre el widget desde la página principal.';
+    nodo.hidden = false;
+    return;
+  }
+  if (S.sessions.length > 0 || !$('libre').hidden) { nodo.hidden = true; return; }
+  const gh = typeof PINGS_GH !== 'undefined' && PINGS_GH.configurado();
+  nodo.textContent = gh
+    ? 'Todo issue abierto ya tiene a alguien encima. Arranca uno nuevo.'
+    : 'Conecta GitHub desde la página principal y te digo qué issue no tiene a nadie encima.';
+  nodo.hidden = false;
 }
 
 // ── Deuda ───────────────────────────────────────────────────────────────────
@@ -607,8 +629,14 @@ function renderDebt() {
   // "4 agentes llevan 3 minutos esperándote a ti" sí.
   const n = S.agentesParados;
   const min = Math.max(1, Math.round(S.totalWaitedMs / 60000 / Math.max(1, n)));
+  // Sin deuda NO se dice "estás al día": felicitar es un callejón sin salida y deja
+  // la ventana sin trabajo que hacer. Se dice cuánta capacidad tienes libre, que es
+  // una invitación a usarla. La lista de abajo dice en qué.
+  const trabajando = S.sessions.filter((s) => s.status === 'working').length;
   const frase = n === 0
-    ? 'Nadie te está esperando. Estás al día.'
+    ? (trabajando > 0
+        ? `Nadie te espera: ${trabajando} ${trabajando === 1 ? 'agente avanza solo' : 'agentes avanzan solos'}. Puedes abrir otro frente.`
+        : 'No tienes ningún agente corriendo. Toda tu capacidad está sin usar.')
     : `${n} ${n === 1 ? 'agente lleva' : 'agentes llevan'} ${min} ${min === 1 ? 'minuto' : 'minutos'} esperándote a ti.`;
   if ($('debt-human').textContent !== frase) $('debt-human').textContent = frase;
 
@@ -855,7 +883,7 @@ setInterval(() => { fetch('/healthz').catch(() => {}); }, 10 * 60 * 1000);
 // ── Arranque ────────────────────────────────────────────────────────────────
 mount($('ball-normal'));
 setLevel('calm');
-if (!TOKEN) $('empty').textContent = 'Sin token: abre el widget desde la página principal.';
+pintarVacio();   // sin token, sin sesiones o sin GitHub: cada caso dice algo distinto
 </script>
 </body>
 </html>

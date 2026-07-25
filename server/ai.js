@@ -39,7 +39,9 @@ export function fallbackBrief(snap) {
     source: 'fallback',
     headline: ranked.length
       ? `${ranked.length} sesiones te esperan. ${minutes(snap.totalWaitedMs)} agent-minutos de deuda.`
-      : 'Nadie te está esperando. Estás al día.',
+      // No felicitamos: "estás al día" es un callejón sin salida. Sin deuda lo útil
+      // es decir que hay capacidad libre, que es una invitación a usarla.
+      : 'Nadie te espera. Tienes capacidad libre para abrir otro frente.',
     // El porqué y la acción salen de state.js: son los mismos que ve la lista por
     // defecto, así el brief no contradice lo que ya tenías en pantalla.
     items: ranked.map((s) => ({
