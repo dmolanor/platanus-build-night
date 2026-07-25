@@ -3,178 +3,586 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Peaje — tú eres el rate limiter</title>
+<title>Peaje — en cuál de tus agentes estás perdiendo más tiempo</title>
+<meta name="description" content="Mide cuánto llevan tus agentes de Claude Code esperándote a ti, te dice a cuál volver, y te deja destrabar un permiso desde el celular sin volver a la terminal.">
 <link rel="icon" href="data:,">
+<link rel="stylesheet" href="./theme.css">
+<script src="./settings.js"></script>
 <style>
-  :root {
-    color-scheme: dark;
-    --bg: #0d0e12; --panel: #15161c; --line: #26272f;
-    --text: #e9e9ee; --dim: #8a8b98; --accent: #ffd23f; --hot: #ff5a5a;
-  }
+  /* Los tokens viven en theme.css. Acá solo hay layout de la landing.
+     Las reglas de composición y la lista de patrones prohibidos están en DESIGN.md:
+     sin gradientes, sin glass, sin glow, sin píldoras, sin scroll-reveal, sin
+     tarjetas simétricas. Se separa con reglas hairline y espacio, no con cajas. */
+
   * { box-sizing: border-box; }
-  body { margin:0; background:var(--bg); color:var(--text);
-         font:16px/1.55 ui-sans-serif,system-ui,-apple-system,sans-serif; }
-  main { max-width: 760px; margin: 0 auto; padding: 56px 20px 96px; }
 
-  h1 { font-size: clamp(38px,9vw,60px); margin:0 0 6px; letter-spacing:-.03em; }
-  .lede { font-size: clamp(17px,4vw,21px); color:#c9c9d4; margin:0 0 6px; text-wrap:balance; }
-  .lede b { color:var(--text); }
-  .sub { color:var(--dim); font-size:15px; margin:0 0 44px; }
+  body {
+    margin: 0;
+    background: var(--ink-1);
+    color: var(--text);
+    font-family: var(--font-sans);
+    font-size: 16px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
 
-  h2 { font-size:13px; letter-spacing:.1em; text-transform:uppercase; color:var(--accent);
-       margin:44px 0 14px; }
+  /* ── Barra superior: a ras del grid, con hairline. No es una píldora flotante. ── */
+  header.bar {
+    position: sticky; top: 0; z-index: 50;
+    background: var(--ink-1);
+    border-bottom: 1px solid var(--line);
+  }
+  .bar-in {
+    max-width: 1100px; margin: 0 auto; padding: 12px 24px;
+    display: flex; align-items: baseline; gap: 14px;
+  }
+  .mark {
+    font-family: var(--font-mono); font-weight: 700; font-size: 14px;
+    letter-spacing: .2em; text-transform: uppercase; color: var(--text);
+  }
+  .mark-sub {
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: .14em;
+    text-transform: uppercase; color: var(--dim-2);
+  }
+  .bar-end { margin-left: auto; display: flex; align-items: center; gap: 12px; }
 
-  .beats { display:grid; gap:10px; margin:0 0 8px; padding:0; list-style:none; }
-  .beat { display:grid; grid-template-columns:auto 1fr; gap:12px; align-items:start;
-          background:var(--panel); border:1px solid var(--line); border-radius:11px; padding:13px 15px; }
-  .dot { width:11px; height:11px; border-radius:50%; margin-top:6px; }
-  .beat p { margin:0; font-size:15px; }
-  .beat p b { display:block; margin-bottom:1px; }
-  .beat p span { color:var(--dim); font-size:14px; }
+  main { max-width: 1100px; margin: 0 auto; padding: 0 24px 96px; }
 
-  .claim { border-left:3px solid var(--accent); padding:2px 0 2px 16px; margin:26px 0 0;
-           color:#c9c9d4; font-size:16px; text-wrap:balance; }
-  .claim b { color:var(--text); }
+  /* ── Hero: asimétrico. El tipo a la izquierda, el objeto focal desplazado. ── */
+  /* La columna del widget mide lo que mide el widget de verdad (380 px de PiP más el
+     borde). Estirarlo a una fracción del grid lo hace ver como una maqueta grande y le
+     mete scrollbar encima del botón de voz. */
+  .hero {
+    display: grid; grid-template-columns: minmax(0, 1fr) 396px;
+    gap: 56px; align-items: start;
+    padding: 64px 0 56px;
+  }
+  .eyebrow {
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: .14em;
+    text-transform: uppercase; color: var(--dim); margin: 0 0 20px;
+  }
+  h1 {
+    font-size: clamp(36px, 5.4vw, 62px); font-weight: 800; letter-spacing: -.04em;
+    line-height: 1.02; margin: 0 0 20px; text-wrap: balance;
+  }
+  .lede { font-size: clamp(17px, 2.2vw, 22px); color: var(--soft); margin: 0 0 14px; max-width: 30em; }
+  .lede b { color: var(--text); font-weight: 600; }
+  .hero-meta {
+    font-family: var(--font-mono); font-size: 12px; color: var(--dim-2);
+    margin: 0 0 28px; line-height: 1.7;
+  }
+  .cta-row { display: flex; gap: 10px; flex-wrap: wrap; }
 
-  .step { border-left:2px solid var(--line); padding:2px 0 26px 20px; }
-  .step.last { border-color:var(--accent); }
-  .step b.n { display:block; color:var(--accent); font-size:12px; letter-spacing:.09em;
-              text-transform:uppercase; margin-bottom:7px; }
-  pre { background:var(--panel); border:1px solid var(--line); border-radius:10px;
-        padding:13px; overflow:auto; font-size:11.5px; max-height:230px; margin:10px 0 0; }
-  button { background:var(--accent); color:#181200; border:0; border-radius:9px;
-           padding:11px 17px; font-weight:700; font-size:15px; cursor:pointer; font-family:inherit; }
-  button.ghost { background:transparent; color:var(--text); border:1px solid #3a3b45; }
-  button:hover { filter:brightness(1.08); }
-  code.tok { background:var(--panel); border:1px solid var(--line); border-radius:6px;
-             padding:4px 9px; font-size:14px; user-select:all; }
-  input { background:var(--panel); border:1px solid var(--line); color:var(--text);
-          border-radius:8px; padding:9px 11px; font-size:15px; font-family:inherit; }
-  .row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
-  .hint { color:var(--dim); font-size:14px; }
+  /* El widget de verdad, corriendo. Sin cromo de navegador falso, sin sombra. */
+  .stage { display: flex; flex-direction: column; gap: 10px; }
+  .stage-frame {
+    border: 1px solid var(--line-2); border-radius: var(--r-3);
+    background: var(--ink-1); overflow: hidden; height: 430px;
+  }
+  .stage-frame iframe { border: 0; width: 100%; height: 100%; display: block; }
+  .stage-cap {
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: .05em;
+    color: var(--dim-2); display: flex; align-items: baseline; gap: 7px; margin: 0;
+  }
+  .live { width: 6px; height: 6px; border-radius: 50%; background: var(--calm); flex: none; }
 
-  .qr { display:flex; gap:18px; align-items:center; flex-wrap:wrap;
-        background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:16px; }
-  .qr img { width:150px; height:150px; background:#fff; border-radius:8px; padding:7px; display:block; }
-  .qr div { flex:1; min-width:220px; }
-  .qr p { margin:0 0 6px; }
+  /* ── Secciones: número mono en el margen, contenido a la derecha. ── */
+  section {
+    display: grid; grid-template-columns: 132px minmax(0, 1fr);
+    gap: 24px; padding: 44px 0; border-top: 1px solid var(--line);
+  }
+  .sec-n {
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: .14em;
+    text-transform: uppercase; color: var(--dim-2); padding-top: 8px;
+  }
+  .sec-n b { display: block; color: var(--warn); font-weight: 700; font-size: 13px; }
+  h2 {
+    font-size: clamp(22px, 3.2vw, 31px); font-weight: 700; letter-spacing: -.02em;
+    line-height: 1.15; margin: 0 0 16px; text-wrap: balance;
+  }
+  h3 { font-size: 16px; font-weight: 700; margin: 0 0 3px; }
+  p { margin: 0 0 14px; max-width: 62ch; }
+  p:last-child { margin-bottom: 0; }
+  .soft { color: var(--soft); }
+  strong { font-weight: 700; color: var(--text); }
+  em { font-style: italic; color: var(--soft); }
 
-  footer { margin-top:52px; padding-top:20px; border-top:1px solid var(--line);
-           color:var(--dim); font-size:13.5px; }
+  /* ── Bloques de máquina ── */
+  .mono {
+    font-family: var(--font-mono); font-size: 13px; line-height: 1.75;
+    background: var(--ink-0); border: 1px solid var(--line);
+    border-radius: var(--r-2); padding: 14px 16px; margin: 0 0 16px;
+    overflow-x: auto; color: var(--soft);
+  }
+  .mono i { color: var(--dim-2); font-style: normal; }
+  .mono b { color: var(--warn); font-weight: 400; }
+  /* Fórmulas y diagramas: los saltos de línea son parte del contenido. */
+  pre.mono { white-space: pre; }
+  /* El bloque de hooks es largo y solo hay que poder leerlo, no admirarlo. */
+  pre.mono.json { max-height: 240px; font-size: 11.5px; line-height: 1.6; }
+
+  /* Lista con guion mono. No hay tarjetas ni iconos. */
+  ul.plain { list-style: none; padding: 0; margin: 0; max-width: 64ch; }
+  ul.plain li { padding: 10px 0 10px 26px; position: relative; border-top: 1px solid var(--line); }
+  ul.plain li:first-child { border-top: 0; padding-top: 0; }
+  ul.plain li::before {
+    content: "×"; position: absolute; left: 2px; top: 10px;
+    font-family: var(--font-mono); color: var(--red);
+  }
+  ul.plain li:first-child::before { top: 0; }
+
+  /* ── Controles ── */
+  button, .btn {
+    font-family: var(--font-sans); font-size: 15px; font-weight: 600;
+    background: var(--warn); color: #181200; border: 0; border-radius: var(--r-2);
+    padding: 11px 18px; cursor: pointer; text-decoration: none; display: inline-block;
+    transition: filter 140ms var(--ease);
+  }
+  button:hover, .btn:hover { filter: brightness(1.08); }
+  button.ghost, .btn.ghost {
+    background: transparent; color: var(--text); border: 1px solid var(--line-2);
+  }
+  button.ghost:hover { background: var(--ink-2); filter: none; }
+  button.sm, .btn.sm { font-size: 13px; padding: 6px 12px; }
+
+  input[type=text], input[type=number] {
+    font-family: var(--font-mono); font-size: 14px;
+    background: var(--ink-0); border: 1px solid var(--line); color: var(--text);
+    border-radius: var(--r-2); padding: 9px 11px;
+  }
+  input::placeholder { color: var(--dim-2); }
+
+  code.tok, .tok {
+    font-family: var(--font-mono); font-size: 13px; background: var(--ink-2);
+    border: 1px solid var(--line); border-radius: var(--r-1);
+    padding: 3px 8px; color: var(--soft);
+  }
+  #tok, #tok2 { user-select: all; }
+
+  /* ── Ajustes ── */
+  .set { max-width: 640px; margin-bottom: 14px; }
+  .set-row {
+    display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 20px;
+    align-items: center; padding: 15px 0; border-top: 1px solid var(--line);
+  }
+  .set-row:first-child { border-top: 0; padding-top: 0; }
+  .set-row p { font-size: 13.5px; color: var(--dim); margin: 0; max-width: 42ch; }
+  .set-ctl { display: flex; align-items: center; gap: 7px; justify-self: end; }
+  .set-ctl input[type=text] { width: 150px; }
+  .set-ctl input[type=number] { width: 88px; text-align: right; }
+  .unit { font-family: var(--font-mono); font-size: 12px; color: var(--dim); }
+
+  .seg { display: flex; border: 1px solid var(--line-2); border-radius: var(--r-2); overflow: hidden; }
+  .seg button {
+    background: transparent; color: var(--dim); border: 0; border-radius: 0;
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: .07em;
+    text-transform: uppercase; padding: 8px 11px; font-weight: 600;
+  }
+  .seg button + button { border-left: 1px solid var(--line-2); }
+  .seg button:hover { background: var(--ink-2); filter: none; color: var(--text); }
+  .seg button[aria-pressed="true"] { background: var(--warn); color: #181200; }
+
+  .toggle {
+    background: transparent; border: 1px solid var(--line-2); color: var(--dim);
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: .07em;
+    text-transform: uppercase; padding: 8px 13px; border-radius: var(--r-2); font-weight: 600;
+  }
+  .toggle:hover { background: var(--ink-2); filter: none; }
+  .toggle[aria-pressed="true"] { border-color: var(--warn); color: var(--warn); }
+  .toggle::before { content: "off · "; color: var(--dim-2); }
+  .toggle[aria-pressed="true"]::before { content: "on · "; color: var(--warn); }
+
+  /* ── Instalación ── */
+  .step { padding: 0 0 26px 22px; border-left: 1px solid var(--line); }
+  .step:last-child { padding-bottom: 0; border-color: var(--warn); }
+  .step-n {
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: .12em;
+    text-transform: uppercase; color: var(--warn); display: block; margin-bottom: 9px;
+  }
+  .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .hint { font-size: 13.5px; color: var(--dim); margin: 9px 0 0; max-width: 62ch; }
+
+  .qr { display: flex; gap: 20px; align-items: center; flex-wrap: wrap; margin-top: 20px; }
+  .qr img {
+    width: 132px; height: 132px; background: #fff; padding: 7px;
+    border-radius: var(--r-2); display: block; flex: none;
+  }
+  .qr div { flex: 1; min-width: 230px; }
+
+  footer {
+    max-width: 1100px; margin: 0 auto; padding: 24px;
+    border-top: 1px solid var(--line); color: var(--dim); font-size: 13.5px;
+  }
+
+  @media (max-width: 880px) {
+    .hero { grid-template-columns: 1fr; gap: 32px; padding: 40px 0 36px; }
+    section { grid-template-columns: 1fr; gap: 8px; padding: 34px 0; }
+    .sec-n { padding-top: 0; }
+    .sec-n b { display: inline; margin-right: 8px; }
+    .set-row { grid-template-columns: 1fr; gap: 12px; }
+    .set-ctl { justify-self: start; }
+    .mark-sub { display: none; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; animation: none !important; }
+  }
 </style>
 </head>
 <body>
-<main>
-  <h1>Peaje</h1>
-  <p class="lede">Nueve agentes te están esperando a ti, y nadie mide ese costo.<br><b>Tú eres el rate limiter.</b></p>
-  <p class="sub">Corre en el navegador. No instalas nada.</p>
 
-  <h2>Qué hace</h2>
-  <ul class="beats">
-    <li class="beat">
-      <span class="dot" style="background:#2fbf71"></span>
-      <p><b>Cuenta los agent-minutos que pierdes.</b>
-         <span>Cada agente detenido esperando que decidas algo suma. Una sesión parada con 3 subagentes son 4 agentes parados, no 1.</span></p>
-    </li>
-    <li class="beat">
-      <span class="dot" style="background:#ffd23f"></span>
-      <p><b>Te lo dice antes de que sea caro.</b>
-         <span>Una ventana flota sobre tu terminal. Cambia de color, te habla, y al pasar el umbral te cobra peaje.</span></p>
-    </li>
-    <li class="beat">
-      <span class="dot" style="background:#ff4d4d"></span>
-      <p><b>Y te deja saldarlo sin volver a la terminal.</b>
-         <span>Cuando un agente se congela pidiendo permiso, lo apruebas o lo deniegas desde aquí — o desde el celular — con una recomendación del modelo.</span></p>
-    </li>
-    <li class="beat">
-      <span class="dot" style="background:#8a8b98"></span>
-      <p><b>Al volver, te reconstruye qué pasaba.</b>
-         <span>Lo caro no es saber a cuál sesión ir: es acordarse de qué estaba haciendo cada una. Y cuál conviene matar por estar dando vueltas.</span></p>
-    </li>
-  </ul>
-
-  <p class="claim">Si nadie decide en 85 segundos, Claude Code muestra el prompt normal en tu terminal.
-     <b>Peaje nunca cuelga un agente.</b> Y si estás en el teclado, ni siquiera se mete.</p>
-
-  <h2>Instalar · 30 segundos</h2>
-
-  <div class="step">
-    <b class="n">Paso 1 · tu token</b>
-    <div class="row">
+<header class="bar">
+  <div class="bar-in">
+    <span class="mark">Peaje</span>
+    <span class="mark-sub">latencia humana, medida</span>
+    <span class="bar-end">
       <code class="tok" id="tok">…</code>
-      <button class="ghost" id="nuevo">Otro token</button>
-    </div>
-    <p class="hint" style="margin:9px 0 0">Compártelo con tu equipo: el mismo token es la misma cola, y cualquiera puede desbloquear al agente del otro.</p>
-    <div class="row" style="margin-top:10px">
-      <label class="hint" for="who">Tu nombre:</label>
-      <input id="who" value="diego" size="12">
-    </div>
+      <a class="btn sm ghost" href="#instalar">Instalar</a>
+    </span>
   </div>
+</header>
 
-  <div class="step">
-    <b class="n">Paso 2 · pégalo en ~/.claude/settings.json</b>
-    <div class="row">
-      <button id="copiar">Copiar bloque de hooks</button>
-      <span class="hint">Son hooks HTTP nativos de Claude Code.</span>
-    </div>
-    <p class="hint" style="margin:9px 0 0">Va <b>dentro</b> del objeto que ya tienes, como una clave más. Reinicia Claude Code después.</p>
-    <pre id="bloque">cargando…</pre>
-  </div>
+<main>
 
-  <div class="step last">
-    <b class="n">Paso 3 · abre el widget</b>
-    <div class="row">
-      <button id="abrir">Abrir ventana flotante</button>
-      <button class="ghost" id="demo">Ver demo</button>
-    </div>
-    <p class="hint" style="margin:9px 0 0">Requiere Chrome o Edge. Flota sobre todas tus ventanas.</p>
-
-    <div class="qr" style="margin-top:16px">
-      <img id="qr" alt="Código QR para abrir el widget en el celular">
-      <div>
-        <p><b>Ábrelo también en el celular.</b></p>
-        <p class="hint">Escanea y decide los permisos desde el teléfono. Es donde estás cuando te alejaste del teclado — que es todo el punto.</p>
+  <div class="hero">
+    <div>
+      <p class="eyebrow">Para quien corre varios agentes a la vez</p>
+      <h1>Te digo en cuál de tus agentes estás perdiendo más tiempo.</h1>
+      <p class="lede">Y te deja arreglarlo ahí mismo, <b>sin volver a la terminal</b>.</p>
+      <p class="hero-meta">Hooks nativos de Claude Code · corre en el navegador · no instalas nada</p>
+      <div class="cta-row">
+        <a class="btn" href="#instalar">Instalar en 30 segundos</a>
+        <button class="ghost" id="demo" type="button">Ver la escalada completa</button>
       </div>
     </div>
+
+    <div class="stage">
+      <div class="stage-frame"><iframe id="preview" title="El widget de Peaje, corriendo"></iframe></div>
+      <p class="stage-cap"><span class="live"></span> No es una maqueta. Es el widget, con datos de demo.</p>
+    </div>
   </div>
 
-  <footer>
-    Solo se envían eventos de hook (herramienta, comando, último mensaje). Nunca tu código ni tu transcript.
-    Efímeros, en memoria, sin persistencia.
-  </footer>
+  <section>
+    <div class="sec-n"><b>01</b> El problema</div>
+    <div>
+      <h2>La mitad de tus sesiones están paradas esperándote, y no sabes cuál.</h2>
+      <p class="soft">Trabajas con varias sesiones de Claude Code en paralelo. Algunas avanzan. Otras
+        llevan rato congeladas esperando que tú decidas algo: un permiso, una respuesta, un siguiente
+        paso. No sabes cuál, ni desde cuándo, ni cuál conviene matar.</p>
+      <p class="soft">Volver al teclado no es lo caro. Lo caro es <strong>reconstruir qué estaba
+        pasando en cada una</strong>.</p>
+      <p>El argumento es aritmético: los agentes por humano suben, y la atención humana es fija.</p>
+      <div class="mono">
+        <i>precondición, medida:</i> 105.533 PRs de agentes en 59.412 repos<br>
+        <i>fuente:</i> AgenticFlict, arXiv 2604.03551<br>
+        <i>a cuántos otros les duele:</i> <b>N=1</b> — es nuestra propia experiencia, y no tenemos más
+      </div>
+      <p class="hint">Ese N=1 está ahí a propósito. Que nadie mida la latencia humana en flujos
+        agénticos lo podemos defender. Que le duela a mucha gente, todavía no.</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-n"><b>02</b> La métrica</div>
+    <div>
+      <h2>Agent-minutos, pesados por agentes realmente parados.</h2>
+      <p class="soft">Una sesión detenida con 3 subagentes son <strong>4 agentes parados</strong>, no 1.
+        Es la diferencia entre medir tiempo de reloj y medir capacidad congelada.</p>
+      <pre class="mono">costo_sesión = tiempo_esperando × (1 + subagentes_activos)
+ranking      = costo × peso(motivo) × (1 + loops)
+
+<i>peso:</i>  permiso <b>3.0</b>   needs_input <b>2.5</b>   falló <b>2.0</b>   terminado <b>1.5</b>   idle <b>1.0</b></pre>
+      <p class="soft">Si no hay eventos en ninguna sesión por 30 minutos, no estás distraído: estás
+        fuera. La deuda se congela y el widget se calla. La intervención se dispara
+        <strong>cuando vuelves</strong>, que es cuando sirve.</p>
+      <p class="hint">Un horario laboral sería la abstracción equivocada. El almuerzo no está en el
+        calendario, y configurarlo mataría el onboarding.</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-n"><b>03</b> El dinero</div>
+    <div>
+      <h2>Esperar no quema tokens. Lo que se pierde es capacidad paralela.</h2>
+      <p class="soft">Un agente bloqueado cuesta <strong>$0</strong> de cómputo. Ahí no hay nada
+        ardiendo. Lo que se pierde es el trabajo que esos agentes podrían estar haciendo mientras te
+        esperan, y eso se calcula con una tarifa por hora que pones tú.</p>
+      <div class="mono">
+        <i>hoy, en este servidor:</i> <b id="hoy-min">—</b> agent-minutos parados<br>
+        <i>a <span id="hoy-rate">$60</span>/h:</i> <b id="hoy-usd">—</b> de capacidad que no se usó
+      </div>
+      <p>Decir <em>«X dólares de cómputo parado»</em> sería falso, y se cae con una sola pregunta. Por
+        eso no lo decimos.</p>
+      <p class="hint">Ese contador vive en memoria y cada redeploy lo borra. Solo suma cuando estás
+        presente: las horas en que no estabas no cuentan.</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-n"><b>04</b> El mecanismo</div>
+    <div>
+      <h2>Un permiso congelado lo destrabas desde el celular.</h2>
+      <p class="soft">El hook <code class="tok">PermissionRequest</code> de Claude Code acepta que un
+        handler responda <code class="tok">allow</code> o <code class="tok">deny</code> en tu nombre.
+        Puedes decidir sin volver a la terminal, con una recomendación del modelo sobre qué hace ese
+        comando y por qué.</p>
+      <pre class="mono">Claude Code  ──PermissionRequest (HTTP)──▶  Peaje  ──SSE──▶  widget / celular
+     ▲                                        │
+     └──────────── <b>allow</b> | <b>deny</b> ─────────────┘</pre>
+      <p class="soft">No hay relay local, ni <code class="tok">npx</code>, ni instalador. Claude Code
+        hace POST directo a una URL.</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-n"><b>05</b> La garantía</div>
+    <div>
+      <h2>Peaje nunca cuelga un agente.</h2>
+      <p class="soft">Si nadie decide en <strong>85 segundos</strong>, el servidor responde vacío y
+        Claude Code muestra el prompt normal en tu terminal. Un timeout de hook es un error no
+        bloqueante: en el peor caso quedas exactamente como estabas antes de instalar esto.</p>
+      <div class="mono">
+        <i>verificado en producción:</i> respuesta vacía a los <b>85,15 s</b>, el proxy aguanta<br>
+        <i>sin API key:</i> todo sigue funcionando con el fallback determinista
+      </div>
+      <p>Y si estás en el teclado, ni siquiera se mete: solo retiene un permiso cuando la deuda indica
+        que estás ausente.</p>
+    </div>
+  </section>
+
+  <section id="ajustes">
+    <div class="sec-n"><b>06</b> Hazlo tuyo</div>
+    <div>
+      <h2>Seis decisiones, cero cuentas.</h2>
+      <p class="soft">Todo esto vive en tu navegador y viaja en la URL del widget. El QR se genera
+        desde esa misma URL, así que <strong>el celular hereda tus ajustes sin login</strong>.</p>
+
+      <div class="set">
+        <div class="set-row">
+          <div>
+            <h3>Tu nombre</h3>
+            <p>Va en cada hook. Con token de equipo es cómo se sabe a quién le toca decidir.</p>
+          </div>
+          <div class="set-ctl"><input type="text" id="s-who" placeholder="tu nombre" autocomplete="off"></div>
+        </div>
+
+        <div class="set-row">
+          <div>
+            <h3>Cuánto vale tu hora</h3>
+            <p>Con esto se calcula la capacidad que dejaste parada. Ponlo en lo que cobras, no en lo
+              que te cuesta Claude.</p>
+          </div>
+          <div class="set-ctl">
+            <span class="unit">$</span>
+            <input type="number" id="s-rate" min="1" max="100000" step="5">
+            <span class="unit">/h</span>
+          </div>
+        </div>
+
+        <div class="set-row">
+          <div>
+            <h3>Mostrar el dinero</h3>
+            <p>Si el número en dólares distrae, apágalo. Los agent-minutos se siguen contando.</p>
+          </div>
+          <div class="set-ctl"><button class="toggle" id="s-money" type="button" aria-pressed="true">dinero</button></div>
+        </div>
+
+        <div class="set-row">
+          <div>
+            <h3>Cuán rápido te molesta</h3>
+            <p>Los umbrales de aviso y de peaje, en minutos de deuda acumulada.</p>
+          </div>
+          <div class="set-ctl">
+            <div class="seg" id="s-sens">
+              <button type="button" data-v="relax" aria-pressed="false">relajado</button>
+              <button type="button" data-v="normal" aria-pressed="true">normal</button>
+              <button type="button" data-v="strict" aria-pressed="false">estricto</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="set-row">
+          <div>
+            <h3>La carita</h3>
+            <p>Apágala y el producto sigue sirviendo: la lista ordenada es la que hace el trabajo.
+              Está acá para que lo compruebes, no para que nos creas.</p>
+          </div>
+          <div class="set-ctl"><button class="toggle" id="s-face" type="button" aria-pressed="true">carita</button></div>
+        </div>
+
+        <div class="set-row">
+          <div>
+            <h3>La voz</h3>
+            <p>El widget puede decir en voz alta a cuál sesión volver. Útil si estás lejos de la
+              pantalla, molesto si hay alguien al lado.</p>
+          </div>
+          <div class="set-ctl"><button class="toggle" id="s-voice" type="button" aria-pressed="true">voz</button></div>
+        </div>
+      </div>
+      <p class="hint">Los cambios se aplican al widget de arriba en cuanto los tocas.</p>
+    </div>
+  </section>
+
+  <section id="instalar">
+    <div class="sec-n"><b>07</b> Instalar</div>
+    <div>
+      <h2>Treinta segundos, tres pasos.</h2>
+
+      <div class="step">
+        <span class="step-n">Paso 1 · tu token</span>
+        <div class="row">
+          <code class="tok" id="tok2">…</code>
+          <button class="ghost sm" id="nuevo" type="button">Generar otro</button>
+        </div>
+        <p class="hint">Compártelo con quien trabaje contigo: el mismo token es la misma cola, y
+          cualquiera puede destrabar al agente del otro. Eso también significa que cualquiera con el
+          token aprueba comandos en tu máquina. Es intencional para dos socios y no escala a una
+          organización.</p>
+      </div>
+
+      <div class="step">
+        <span class="step-n">Paso 2 · pégalo en ~/.claude/settings.json</span>
+        <div class="row">
+          <button id="copiar" type="button">Copiar bloque de hooks</button>
+          <span class="hint" style="margin:0">Va <strong>dentro</strong> del objeto que ya tienes,
+            como una clave más. Reinicia Claude Code después.</span>
+        </div>
+        <pre class="mono json" id="bloque" style="margin-top:12px">cargando…</pre>
+      </div>
+
+      <div class="step">
+        <span class="step-n">Paso 3 · abre la ventana flotante</span>
+        <div class="row">
+          <button id="abrir" type="button">Abrir el widget</button>
+          <span class="hint" style="margin:0">Chrome o Edge. Flota sobre todas tus ventanas.</span>
+        </div>
+
+        <div class="qr">
+          <img id="qr" alt="Código QR que abre el widget en el celular">
+          <div>
+            <h3>Ábrelo también en el celular</h3>
+            <p class="hint" style="margin-top:5px">Escanea y decide los permisos desde el teléfono. Es
+              donde estás cuando te alejaste del teclado, que es todo el punto. El QR ya lleva tus
+              ajustes.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-n"><b>08</b> Lo que no hace</div>
+    <div>
+      <h2>Decir esto en voz alta sale más barato que descubrirlo instalando.</h2>
+      <ul class="plain">
+        <li><strong>No te bloquea la máquina.</strong> El peaje toma la ventana del widget y nada más.
+          Tu terminal sigue intacta y puedes cerrarlo. Esta versión apuesta a que ver el número basta.</li>
+        <li><strong>No lee tus transcripts.</strong> Solo eventos estructurados de hook: herramienta,
+          comando, último mensaje. Nunca tu código.</li>
+        <li><strong>No es un dashboard de PRs e issues.</strong> GitHub ya lo hace bien.</li>
+        <li><strong>No hay cuentas ni base de datos.</strong> El estado vive en memoria y cada
+          redeploy lo borra.</li>
+        <li><strong>No hay un personaje por sesión.</strong> Hay uno solo, y representa la deuda, no a
+          los agentes.</li>
+        <li><strong>Solo funciona con Claude Code.</strong></li>
+      </ul>
+    </div>
+  </section>
+
 </main>
+
+<footer>
+  Se envían eventos de hook y nada más. Nunca tu código ni tu transcript. Efímeros, en memoria, sin
+  persistencia.
+</footer>
 
 <script>
 const $ = (s) => document.querySelector(s);
+const PREVIEW = 'demo-peaje-landing';   // token público a propósito: el hero corre sin backend
 let token = new URLSearchParams(location.search).get('token') || localStorage.getItem('peaje_token');
 
+// ── Token, QR y bloque de hooks ────────────────────────────────────────────
 async function ensureToken() {
   if (!token) token = (await (await fetch('/api/token/new')).json()).token;
   localStorage.setItem('peaje_token', token);
   $('#tok').textContent = token;
-  $('#qr').src = `/api/qr.svg?token=${encodeURIComponent(token)}`;
+  $('#tok2').textContent = token;
+  pintarQR();
   await pintarBloque();
 }
 
 async function pintarBloque() {
-  const who = encodeURIComponent($('#who').value || 'yo');
+  const who = encodeURIComponent($('#s-who').value.trim() || 'yo');
   const r = await fetch(`/api/hooks.json?token=${encodeURIComponent(token)}&who=${who}`);
   $('#bloque').textContent = JSON.stringify(await r.json(), null, 2);
 }
 
-$('#nuevo').onclick = async () => { token = null; localStorage.removeItem('peaje_token'); await ensureToken(); };
-$('#who').oninput = () => pintarBloque();
+function pintarQR() { if (token) $('#qr').src = `/api/qr.svg?${PEAJE.query(token)}`; }
+
+// ── Ajustes ────────────────────────────────────────────────────────────────
+// El iframe se recarga con debounce: cada recarga reinicia el SSE, así que no conviene
+// hacerlo en cada tecla del campo de tarifa.
+let t = null;
+function aplicar(recargar) {
+  const s = PEAJE.read();
+  $('#s-money').setAttribute('aria-pressed', s.money ? 'true' : 'false');
+  $('#s-face').setAttribute('aria-pressed', s.face ? 'true' : 'false');
+  $('#s-voice').setAttribute('aria-pressed', s.voice ? 'true' : 'false');
+  for (const b of document.querySelectorAll('#s-sens button')) {
+    b.setAttribute('aria-pressed', b.dataset.v === s.sens ? 'true' : 'false');
+  }
+  $('#hoy-rate').textContent = '$' + s.rate;
+  pintarQR();
+  pintarHoy();
+  if (!recargar) return;
+  clearTimeout(t);
+  t = setTimeout(() => { $('#preview').src = `/widget.html?${PEAJE.query(PREVIEW)}`; }, 450);
+}
+
+function toggle(id, key) {
+  $(id).onclick = () => {
+    PEAJE.save({ [key]: PEAJE.read()[key] ? 0 : 1 });
+    aplicar(true);
+  };
+}
+toggle('#s-money', 'money');
+toggle('#s-face', 'face');
+toggle('#s-voice', 'voice');
+
+for (const b of document.querySelectorAll('#s-sens button')) {
+  b.onclick = () => { PEAJE.save({ sens: b.dataset.v }); aplicar(true); };
+}
+
+$('#s-rate').oninput = () => {
+  const v = Number($('#s-rate').value);
+  if (v > 0) { PEAJE.save({ rate: v }); aplicar(true); }
+};
+
+$('#s-who').oninput = () => { PEAJE.save({ who: $('#s-who').value }); pintarBloque(); };
+
+// ── Botones ────────────────────────────────────────────────────────────────
+$('#nuevo').onclick = async () => {
+  token = null;
+  localStorage.removeItem('peaje_token');
+  await ensureToken();
+};
+
 $('#copiar').onclick = async () => {
   await navigator.clipboard.writeText($('#bloque').textContent);
   $('#copiar').textContent = '¡Copiado!';
   setTimeout(() => ($('#copiar').textContent = 'Copiar bloque de hooks'), 1500);
 };
-$('#demo').onclick = () => fetch(`/api/demo/start?token=${encodeURIComponent(token)}&ramp=1`, { method: 'POST' });
 
-// Document PiP exige un gesto del usuario. Este clic ES ese gesto — y de paso
-// habilita la voz, que el navegador bloquea hasta que haya interacción.
+// ramp=1 arranca la deuda en cero para que se vea la escalada entera subiendo en vivo.
+$('#demo').onclick = async () => {
+  await fetch(`/api/demo/start?token=${PREVIEW}&ramp=1`, { method: 'POST' });
+  $('#preview').src = `/widget.html?${PEAJE.query(PREVIEW)}`;
+};
+
+// Document PiP exige un gesto del usuario. Este clic ES ese gesto, y de paso habilita la
+// voz, que el navegador bloquea hasta que haya interacción.
 $('#abrir').onclick = async () => {
-  const url = `/widget.html?token=${encodeURIComponent(token)}`;
+  const url = `/widget.html?${PEAJE.query(token)}`;
   if (!('documentPictureInPicture' in window)) {
     window.open(url, 'peaje', 'width=380,height=280');
     return;
@@ -187,7 +595,35 @@ $('#abrir').onclick = async () => {
   pip.document.body.appendChild(frame);
 };
 
+// ── Hero en vivo ───────────────────────────────────────────────────────────
+// El estado sembrado son 6 agentes acumulando sobre 5,6 min de deuda, así que sube ~6
+// agent-minutos por minuto real. Medido: llega a peaje (rojo, pantalla completa) a los
+// 45 s clavados. Re-sembramos a los 30 para tener margen y que el hero se quede en la
+// banda donde se ve la lista, que es lo que la landing está explicando al lado.
+// Con sensibilidad "estricto" sí entra al peaje, y está bien: eso es lo que hace estricto.
+async function sembrar() {
+  try { await fetch(`/api/demo/start?token=${PREVIEW}&speed=1`, { method: 'POST' }); } catch {}
+}
+
+async function pintarHoy() {
+  try {
+    const s = PEAJE.read();
+    const r = await fetch(`/api/state?token=${PREVIEW}&rate=${s.rate}`);
+    const ms = (await r.json()).cost?.perdidoHoyMs || 0;
+    $('#hoy-min').textContent = ms < 30000 ? '0' : String(Math.round(ms / 60000));
+    $('#hoy-usd').textContent = '$' + ((ms / 3600000) * s.rate).toFixed(2);
+  } catch {}
+}
+
+// ── Arranque ───────────────────────────────────────────────────────────────
+const s0 = PEAJE.read();
+$('#s-who').value = s0.who;
+$('#s-rate').value = s0.rate;
+aplicar(false);
 ensureToken();
+sembrar().then(() => { $('#preview').src = `/widget.html?${PEAJE.query(PREVIEW)}`; });
+setInterval(sembrar, 30000);
+setInterval(pintarHoy, 10000);
 </script>
 </body>
 </html>
