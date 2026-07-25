@@ -511,6 +511,24 @@ body[data-offline="1"] .conn {
 }
 .permit-more[hidden] { display: none; }
 
+/* A qué issue pertenece esta conversación. Va debajo del repo porque responde a la
+   misma pregunta —"¿qué es esto?"— y antes del motivo, que responde "¿y qué hago?".
+   El emparejamiento por número es un hecho; el semántico es una apuesta de la IA, y
+   se marca con el signo de interrogación para no venderlo como certeza. */
+.sess-issue {
+  display: block;
+  margin-top: 3px;
+  font-size: clamp(9.5px, 2.6vw, 12px);
+  color: var(--dim);
+  text-decoration: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sess-issue:hover { color: var(--text); text-decoration: underline; }
+.sess-issue[hidden] { display: none; }
+.sess-issue[data-como="semejanza"]::after { content: " ?"; color: var(--dim-2); }
+
 /* ── Brief ────────────────────────────────────────────────────────────────── */
 /* El que hace scroll es la LISTA, no la vista. Con la vista entera scrolleando,
    la barra nativa se le montaba encima a los botones de #top (absolute, right:6px)

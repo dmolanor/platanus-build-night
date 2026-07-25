@@ -97,6 +97,7 @@ const S = {
   auto: [],
   libres: [],
   libresAt: 0,
+  pares: new Map(),   // sessionId -> issue/PR emparejado
   view: 'normal',
   tollGraceUntil: 0,
   paying: false,
@@ -476,7 +477,13 @@ function buildSession() {
   const progTxt = el('span');
   prog.append(progBar, progTxt);
   prog.hidden = true;
-  main.append(head, where, prog, why, action, msg);
+  // A qué trabajo pertenece esta conversación. El servidor ya lo empareja; sin
+  // pintarlo aquí, saber el issue no servía de nada.
+  const issue = el('a', 'sess-issue');
+  issue.target = '_blank';
+  issue.rel = 'noopener noreferrer';
+  issue.hidden = true;
+  main.append(head, where, issue, prog, why, action, msg);
 
   const cost = el('div', 'sess-cost');
   const costN = el('b');
@@ -513,6 +520,17 @@ function buildSession() {
       prog.dataset.casi = pr.pct >= 80 ? '1' : '0';
     } else {
       prog.hidden = true;
+    }
+
+    // El emparejamiento con GitHub, en la fila. `numero` viene de una referencia
+    // #123 o de la rama (determinista, nunca se equivoca); `semejanza` es la IA.
+    const par = S.pares.get(s.sessionId);
+    issue.hidden = !par;
+    if (par) {
+      issue.textContent = `${par.esPR ? 'PR' : 'issue'} #${par.numero} · ${par.titulo}`;
+      issue.href = `https://github.com/${par.repo}/issues/${par.numero}`;
+      issue.title = par.porque || (par.como === 'numero' ? 'Referenciado en la conversación' : '');
+      issue.dataset.como = par.como || '';
     }
 
     why.textContent = s.why || motivo(s);
@@ -572,8 +590,9 @@ function buildLibre() {
   return { el: root, update };
 }
 
-// Solo se consulta cuando NO hay deuda: es la respuesta a "estás al día, ¿y ahora
-// qué?". Con agentes esperándote, lo urgente es la lista, no lo que falta empezar.
+// Una sola consulta sirve para dos cosas: los `pares` (a qué issue pertenece cada
+// conversación, que se pinta en su fila) y los `sinNadie` (lo que nadie empezó, que
+// solo se muestra cuando estás al día).
 async function cargarLibres() {
   const ahora = Date.now();
   if (ahora - S.libresAt < 60_000) return;
@@ -592,7 +611,9 @@ async function cargarLibres() {
     if (!r.ok) return;
     const d = await r.json();
     S.libres = Array.isArray(d.sinNadie) ? d.sinNadie.slice(0, 5) : [];
+    S.pares = new Map((d.pares || []).map((p) => [p.sessionId, p]));
     renderLibres();
+    renderSessions();   // las filas necesitan repintarse con su issue
   } catch (_) {}
 }
 
@@ -826,7 +847,10 @@ function render(snap) {
   renderDebt();
   renderSessions();
   renderAuto();
-  if (S.agentesParados === 0) cargarLibres();
+  // Se consulta SIEMPRE (con su propio enfriamiento de 60 s), no solo cuando estás
+  // al día: el emparejamiento se pinta en cada fila, y una fila que te está
+  // esperando es justo donde más importa saber a qué trabajo pertenece.
+  cargarLibres();
   renderLibres();
   renderPermits();
 
