@@ -20,6 +20,14 @@
 | `angry` | ≥ 5 min |
 | `toll` | ≥ 10 min |
 
+**Sensibilidad por widget.** `?sens=relax|normal|strict` recalcula `snap.level` en
+`personalizar()` (`index.js`) usando 5/10/20 o 1/3/5 minutos. Es **solo presentación**:
+`levelFor()` no se toca, y la tabla de arriba sigue siendo el defecto.
+
+> ⚠️ **La compuerta de retención de permisos NO usa el nivel personalizado.** `/hook` arma su
+> propio snapshot sin query, así que nadie puede aflojarla con `?sens=relax` desde su URL.
+> Si algún día alguien mueve esa compuerta a leer `snap.level`, abre ese agujero.
+
 - Sesión `stale`: sin eventos por > 30 min. Deja de sumar deuda.
 - TTL de token: 2 h sin eventos → se borra.
 - Retención de permiso: **85 s** máximo (el hook tiene `timeout: 90`, dejamos 5 s de margen).
@@ -73,7 +81,10 @@ Si retiene y el humano decide desde el widget, responde `200` con:
       "status": "waiting", "reason": "needs_input",
       "since": 1753372800000, "waitedMs": 1320000, "blockedAgents": 4,
       "lastMessage": "Necesito confirmar antes de borrar…", "loopCount": 0,
-      "tasksOpen": 2, "tasksDone": 5, "lastTask": "Arreglar login" }
+      "tasksOpen": 2, "tasksDone": 5, "lastTask": "Arreglar login",
+      "label": "Arreglar hidratación del dashboard",
+      "why": "Pidió permiso y está congelada", "action": "Decide el permiso desde aquí",
+      "costMs": 1320000, "progress": { "done": 4, "total": 5, "pct": 80 } }
   ],
   "permits": [
     { "id": "p_1", "sessionId": "abc-123", "repo": "buk-api", "who": "diego",
@@ -85,6 +96,15 @@ Si retiene y el humano decide desde el widget, responde `200` con:
 }
 ```
 
+- `label`: cómo se llama la sesión para un humano — título de la conversación, o lo último que le
+  pediste, o el id corto. Con dos sesiones en el mismo repo, el repo no distingue nada.
+- `progress`: `{done, total, pct}` **o `null`** si el agente no lleva lista de tareas.
+  Nunca se pinta 0% inventado: un dato falso vale menos que ninguno.
+- `why` / `action`: calculados sin modelo en `state.js`, para que la lista por defecto sirva
+  siempre. El brief con IA los enriquece y sale de la misma fuente, así que no se contradicen.
+- `cost`: `{ idleUsd, rateUsdHour, loopSessions, perdidoHoyMs, perdidoHoyUsd }`. Esperar **no**
+  quema tokens — es costo de oportunidad, con la tarifa a la vista. El acumulado del día solo
+  suma con `presence: "here"`.
 - `status`: `working` | `waiting` | `done` | `stale`
 - `blockedAgents`: agentes realmente parados por esta sesión = `1 + subagentes activos`.
   **`totalWaitedMs` suma `waitedMs × blockedAgents`**, no solo el tiempo de reloj: una sesión

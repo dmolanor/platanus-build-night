@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Widget Deuda IA - Plátano</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            background-color: #1e1e24;
+            color: #f0f0f0;
+            margin: 0;
+        }
+
+        .widget-container {
+            width: 340px;
+            height: 220px;
+            background: #2b2b36;
+            border-radius: 16px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            border: 1px solid #3d3d4e;
+            position: relative;
+        }
+
+        .svg-wrapper {
+            width: 100px;
+            height: 100px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .controls {
+            margin-top: 24px;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        button {
+            padding: 10px 16px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 13px;
+            transition: all 0.2s ease;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+        }
+
+        button:hover { transform: translateY(-2px); filter: brightness(1.1); }
+        button:active { transform: translateY(0); }
+
+        .btn-calm { background-color: #a3e635; color: #1a2e05; }
+        .btn-nudge { background-color: #facc15; color: #362003; }
+        .btn-angry { background-color: #f97316; color: #431407; }
+        .btn-toll { background-color: #dc2626; color: #ffffff; }
+
+        /* ==========================================
+           ESTILOS Y TRANSICIONES DEL PLÁTANO
+           ========================================== */
+        
+        /* VARIABLES POR ESTADO */
+        .state-calm {
+            --body: #a3e635;
+            --tip: #4d7c0f;
+            --spots: #84cc16;
+            --stroke: #1a2e05;
+            --glow: rgba(163, 230, 53, 0.3);
+        }
+
+        .state-nudge {
+            --body: #facc15;
+            --tip: #854d0e;
+            --spots: #ca8a04;
+            --stroke: #362003;
+            --glow: rgba(250, 204, 21, 0.4);
+        }
+
+        .state-angry {
+            --body: #f97316;
+            --tip: #451a03;
+            --spots: #7c2d12;
+            --stroke: #270e04;
+            --glow: rgba(249, 115, 22, 0.5);
+        }
+
+        .state-toll {
+            --body: #7f1d1d;
+            --tip: #450a0a;
+            --spots: #450a0a;
+            --stroke: #f87171;
+            --glow: rgba(127, 29, 29, 0.6);
+        }
+
+        #banana-widget {
+            width: 100%;
+            height: 100%;
+            transition: all 400ms ease;
+            filter: drop-shadow(0 0 12px var(--glow));
+        }
+
+        #body, #tip-top, #tip-bottom, #spots, #eye-l, #eye-r, #mouth {
+            transition: all 400ms ease;
+            transform-origin: center;
+        }
+
+        #body { fill: var(--body); }
+        #tip-top, #tip-bottom { fill: var(--tip); }
+        #spots { fill: var(--spots); }
+
+        #eye-l, #eye-r, #mouth {
+            fill: none;
+            stroke: var(--stroke);
+            stroke-width: 6;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+        }
+
+        /* 1. STATE: CALM (Plátano firme, curvo, verde-lima, respiración) */
+        .state-calm #body {
+            d: path("M 80,25 C 130,55 140,115 105,170 C 80,140 70,80 80,25 Z");
+            animation: banana-breath 4s ease-in-out infinite;
+        }
+        .state-calm #tip-top {
+            d: path("M 80,25 C 82,15 88,12 90,10 C 92,18 85,22 80,25 Z");
+        }
+        .state-calm #tip-bottom {
+            d: path("M 105,170 C 103,176 100,180 96,182 C 95,176 100,172 105,170 Z");
+        }
+        .state-calm #spots {
+            opacity: 0.2;
+            d: path("M 95,60 R 2 2 0 1 0 0,0.1 M 110,100 R 2 2 0 1 0 0,0.1");
+        }
+        .state-calm #eye-l { d: path("M 82,85 C 82,85 86,92 90,85"); }
+        .state-calm #eye-r { d: path("M 104,92 C 104,92 108,99 112,92"); }
+        .state-calm #mouth { d: path("M 88,120 C 95,130 105,130 110,122"); }
+
+        /* 2. STATE: NUDGE (Amarillo, ojos fijos abiertos, cuerpo recto/tenso) */
+        .state-nudge #body {
+            d: path("M 75,20 C 120,50 135,120 110,175 C 80,140 65,85 75,20 Z");
+        }
+        .state-nudge #tip-top {
+            d: path("M 75,20 C 77,10 83,8 87,5 C 89,14 81,18 75,20 Z");
+        }
+        .state-nudge #tip-bottom {
+            d: path("M 110,175 C 108,181 104,185 100,187 C 98,180 104,177 110,175 Z");
+        }
+        .state-nudge #spots {
+            opacity: 0.5;
+            d: path("M 90,55 R 3 3 0 1 0 0,0.1 M 105,115 R 4 4 0 1 0 0,0.1");
+        }
+        .state-nudge #eye-l {
+            d: path("M 85,85 L 85,85.1");
+            stroke-width: 10;
+        }
+        .state-nudge #eye-r {
+            d: path("M 108,92 L 108,92.1");
+            stroke-width: 10;
+        }
+        .state-nudge #mouth { d: path("M 88,122 L 106,126"); }
+
+        /* 3. STATE: ANGRY (Naranja, maduro/manchado, retorcido y vibrando) */
+        .state-angry #body {
+            d: path("M 65,20 C 140,45 145,130 95,180 C 70,135 50,75 65,20 Z");
+            animation: banana-vibrate 0.25s linear infinite;
+        }
+        .state-angry #tip-top {
+            d: path("M 65,20 C 63,10 70,5 75,2 C 77,12 70,17 65,20 Z");
+            animation: banana-vibrate 0.25s linear infinite;
+        }
+        .state-angry #tip-bottom {
+            d: path("M 95,180 C 93,186 88,190 84,191 C 83,184 89,181 95,180 Z");
+            animation: banana-vibrate 0.25s linear infinite;
+        }
+        .state-angry #spots {
+            opacity: 0.9;
+            d: path("M 80,45 R 6 6 0 1 0 0,0.1 M 95,90 R 8 8 0 1 0 0,0.1 M 85,140 R 5 5 0 1 0 0,0.1");
+        }
+        .state-angry #eye-l { d: path("M 78,92 L 92,84"); }
+        .state-angry #eye-r { d: path("M 102,88 L 115,98"); }
+        .state-angry #mouth { d: path("M 82,132 C 92,120 102,122 112,130"); }
+
+        /* 4. STATE: TOLL (Rojo oscuro/podrido, aplastado/derretido en la base) */
+        .state-toll #body {
+            d: path("M 20,150 C 50,110 150,110 180,150 C 195,175 160,195 100,195 C 40,195 5,175 20,150 Z");
+        }
+        .state-toll #tip-top {
+            d: path("M 30,155 C 20,150 15,145 10,140 C 15,148 22,152 30,155 Z");
+        }
+        .state-toll #tip-bottom {
+            d: path("M 170,155 C 180,150 185,145 190,140 C 185,148 178,152 170,155 Z");
+        }
+        .state-toll #spots {
+            opacity: 0.8;
+            d: path("M 50,160 R 10 6 0 1 0 0,0.1 M 120,165 R 14 5 0 1 0 0,0.1");
+        }
+        .state-toll #eye-l { d: path("M 65,145 L 85,145"); }
+        .state-toll #eye-r { d: path("M 115,145 L 135,145"); }
+        .state-toll #mouth { d: path("M 75,175 L 125,175"); }
+
+        /* ANIMACIONES */
+        @keyframes banana-breath {
+            0%, 100% { transform: scale(1) rotate(0deg); }
+            50% { transform: scale(1.04) rotate(2deg); }
+        }
+
+        @keyframes banana-vibrate {
+            0% { transform: translate(0, 0) rotate(0deg); }
+            25% { transform: translate(2px, -1px) rotate(1deg); }
+            50% { transform: translate(-1px, 2px) rotate(-1deg); }
+            75% { transform: translate(-2px, -1px) rotate(1deg); }
+            100% { transform: translate(0, 0) rotate(0deg); }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="widget-container">
+        <div class="svg-wrapper">
+            <svg id="banana-widget" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" class="state-calm">
+                <!-- CUERPO Y MANCHAS (Máximo 6 elementos estructurales) -->
+                <path id="body" d="M 80,25 C 130,55 140,115 105,170 C 80,140 70,80 80,25 Z" />
+                <path id="tip-top" d="M 80,25 C 82,15 88,12 90,10 C 92,18 85,22 80,25 Z" />
+                <path id="tip-bottom" d="M 105,170 C 103,176 100,180 96,182 C 95,176 100,172 105,170 Z" />
+                <path id="spots" d="M 95,60 R 2 2 0 1 0 0,0.1 M 110,100 R 2 2 0 1 0 0,0.1" />
+
+                <!-- EXPRESIÓN FACIAL -->
+                <path id="eye-l" d="M 82,85 C 82,85 86,92 90,85" />
+                <path id="eye-r" d="M 104,92 C 104,92 108,99 112,92" />
+                <path id="mouth" d="M 88,120 C 95,130 105,130 110,122" />
+            </svg>
+        </div>
+    </div>
+
+    <div class="controls">
+        <button class="btn-calm" onclick="setState('state-calm')">0 min (Calm)</button>
+        <button class="btn-nudge" onclick="setState('state-nudge')">2-5 min (Nudge)</button>
+        <button class="btn-angry" onclick="setState('state-angry')">5-10 min (Angry)</button>
+        <button class="btn-toll" onclick="setState('state-toll')">+10 min (Toll)</button>
+    </div>
+
+    <script>
+        function setState(className) {
+            const svg = document.getElementById('banana-widget');
+            svg.classList.remove('state-calm', 'state-nudge', 'state-angry', 'state-toll');
+            svg.classList.add(className);
+        }
+    </script>
+</body>
+</html>
