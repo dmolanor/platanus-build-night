@@ -6,6 +6,8 @@
 <title>Peaje</title>
 <link rel="icon" href="data:,">
 <link rel="stylesheet" href="./style.css">
+<link rel="stylesheet" href="./theme.css">
+<script src="./settings.js"></script>
 </head>
 <body data-level="calm" data-view="normal" data-permits="0" data-offline="0">
 
@@ -756,7 +758,7 @@ function setOffline(v) {
   $('conn').title = v ? 'sin conexión — reconectando' : 'conectado';
 }
 
-const es = new EventSource(`/events?token=${QT}`);
+const es = new EventSource(`/events${location.search}`);   // reenvía token + ajustes
 es.addEventListener('open', () => setOffline(false));
 es.addEventListener('error', () => setOffline(true));   // EventSource reconecta solo
 es.addEventListener('message', (e) => {

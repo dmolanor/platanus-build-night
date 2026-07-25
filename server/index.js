@@ -98,6 +98,80 @@ app.post('/hook', (req, res) => {
   permits.hold({ token, who, payload, res, collision, onAdvice: (p) => aiAdvice(p, session, collision) });
 });
 
+// ── Personalización ──────────────────────────────────────────────────────────
+// Los ajustes viajan en la query de la URL del widget (y por lo tanto en el QR, que
+// se genera desde esa misma URL). Se aplican ACÁ, sobre el snapshot ya armado, por
+// dos razones: state.js no tiene que saber que existen, y no hay nada que persistir.
+// Es el mismo lugar donde ya se sobreescribe snap.permits.
+
+const SENS_MIN = {                      // minutos de nudge / angry / toll
+  relax: [5, 10, 20],
+  normal: [2, 5, 10],                   // el de CONTRACT.md §1
+  strict: [1, 3, 5],
+};
+
+// Acumulado del día. Vive en memoria y cada redeploy lo borra: lo decimos en la UI en
+// vez de esconderlo. El guardia de lastAt es lo que evita que dos pestañas del widget
+// abiertas a la vez cuenten doble — cada conexión SSE llama a esto una vez por segundo.
+const perdidoHoy = new Map();           // token → { dia, ms, lastAt }
+
+function acumular(token, snap) {
+  if (!token) return 0;
+  const ahora = Date.now();
+  const dia = new Date().toISOString().slice(0, 10);
+  let e = perdidoHoy.get(token);
+  if (!e || e.dia !== dia) e = { dia, ms: 0, lastAt: ahora };
+  const delta = ahora - e.lastAt;
+  if (delta >= 900) {
+    // Solo acumula si estás presente. Las horas en que estuviste fuera no cuentan:
+    // no hay a quién intervenir en una silla vacía, y tampoco a quién cobrarle.
+    if (snap.presence === 'here') e.ms += delta * (snap.agentesParados || 0);
+    e.lastAt = ahora;
+  }
+  perdidoHoy.set(token, e);
+  return e.ms;
+}
+
+// `acumula` solo va en true desde /events. /api/state es un endpoint de lectura (lo usa
+// el widget para pintar el acumulado, y CONTRACT.md §5 lo declara para debug): un GET no
+// debería mover el contador. Los dos comparten el mismo Map, así que el widget lee ahí
+// lo que su propio SSE viene acumulando.
+function personalizar(req, token, snap, acumula) {
+  const q = req.query;
+
+  // Tarifa. Lo que se pierde esperando es capacidad paralela, no cómputo: esperar no
+  // quema tokens. Por eso el número se recalcula sobre totalWaitedMs y nada más.
+  const rate = Number(q.rate);
+  const tarifa = isFinite(rate) && rate > 0 && rate <= 100000
+    ? rate
+    : (snap.cost?.rateUsdHour ?? 60);
+  const conPlata = q.money !== '0';
+
+  if (snap.cost) {
+    snap.cost.rateUsdHour = tarifa;
+    snap.cost.idleUsd = conPlata
+      ? Math.round((snap.totalWaitedMs / 3_600_000) * tarifa * 100) / 100
+      : 0;
+    const hoyMs = acumula ? acumular(token, snap) : (perdidoHoy.get(token)?.ms ?? 0);
+    snap.cost.perdidoHoyMs = hoyMs;
+    snap.cost.perdidoHoyUsd = conPlata
+      ? Math.round((hoyMs / 3_600_000) * tarifa * 100) / 100
+      : 0;
+  }
+
+  // Sensibilidad. El widget deriva TODO de snap.level (colores de la bola, vista de
+  // peaje, voz), así que recalcularlo acá alcanza y levelFor() no se toca. En 'normal'
+  // no entramos nunca: el comportamiento por defecto queda idéntico al de hoy.
+  const sens = SENS_MIN[q.sens] ? q.sens : 'normal';
+  if (sens !== 'normal') {
+    const [n, a, t] = SENS_MIN[sens].map((m) => m * 60_000);
+    const d = snap.totalWaitedMs;
+    snap.level = d <= 0 ? 'calm' : d >= t ? 'toll' : d >= a ? 'angry' : d >= n ? 'nudge' : 'calm';
+  }
+
+  return snap;
+}
+
 // ── Stream al widget ─────────────────────────────────────────────────────────
 app.get('/events', (req, res) => {
   const token = tokenOf(req);
@@ -112,6 +186,7 @@ app.get('/events', (req, res) => {
   const tick = () => {
     const snap = snapshot(token);
     snap.permits = permits.pendingFor(token);
+    personalizar(req, token, snap, true);
     res.write(`data: ${JSON.stringify(snap)}\n\n`);
   };
   tick();
@@ -130,8 +205,10 @@ app.post('/api/permit/:id', (req, res) => {
 
 // ── Resto ────────────────────────────────────────────────────────────────────
 app.get('/api/state', (req, res) => {
-  const snap = snapshot(tokenOf(req));
-  snap.permits = permits.pendingFor(tokenOf(req));
+  const token = tokenOf(req);
+  const snap = snapshot(token);
+  snap.permits = permits.pendingFor(token);
+  personalizar(req, token, snap, false);
   res.json(snap);
 });
 
@@ -245,8 +322,11 @@ app.get('/api/hooks.json', (req, res) => {
 // QR generado en el servidor, sin servicio externo: depender de una API de
 // terceros en vivo durante el pitch sería el único punto de red evitable.
 app.get('/api/qr.svg', async (req, res) => {
-  const token = tokenOf(req);
-  const url = `https://${req.get('host')}/widget.html?token=${encodeURIComponent(token)}`;
+  // Se reenvía la query entera, no solo el token: así el QR lleva los ajustes (tarifa,
+  // sensibilidad, carita) al celular. Es lo que hace que la config viaje sin sesiones.
+  const qs = new URLSearchParams();
+  for (const k of Object.keys(req.query)) qs.set(k, String(req.query[k]));
+  const url = `https://${req.get('host')}/widget.html?${qs.toString()}`;
   try {
     const svg = await QRCode.toString(url, {
       type: 'svg', errorCorrectionLevel: 'M', margin: 1,

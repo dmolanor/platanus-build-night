@@ -1,19 +1,38 @@
-// La bola. No es una mascota: es la deuda que les debes, con cara.
-// Una sola bola por ventana (puede montarse en varios slots: normal y peaje),
-// nunca una por sesión.
+// El plátano. No es una mascota: es la deuda que les debes, madurándose.
 //
-// SVG + CSS puro. Aquí solo se construye el SVG y se pone data-level;
-// todo el color, la deformación y las animaciones viven en style.css.
+// Por qué un plátano y no una bola: la maduración ES la métrica. Una bola necesita
+// una cara que te DIGA que está enojada; un plátano que se pone marrón MUESTRA tiempo
+// acumulado sin que nadie lo explique. Es el único objeto cotidiano cuya apariencia
+// es un reloj. Y de paso culpa a la entropía en vez de a ti, que es exactamente el
+// giro que pedía el doc §1 al abandonar "tú eres el rate limiter".
+//
+// Uno solo por ventana (montado en dos slots: normal y peaje), nunca uno por sesión.
+//
+// SVG + CSS puro, como manda peaje-brief §4.2. Aquí solo se construye el SVG y se
+// pone data-level. El color, la deformación y las animaciones viven en el CSS.
+//
+// CONTRATO DE CLASES: los nombres ch-all / ch-body-g / ch-face / ch-pupils / ch-lids /
+// ch-brow / ch-mouth / ch-body / ch-shadow son los mismos de la bola. style.css les
+// tiene colgadas todas las animaciones por nivel (breathe, stare, deform, vibrate,
+// loom, sway) y NO se toca: el plátano las hereda enteras.
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
-// La boca es lo único que cambia de forma "a mano": el resto es CSS.
-const MOUTHS = {
-  calm:  'M46 76 Q60 87 74 76',
-  nudge: 'M47 80 L73 80',
-  angry: 'M46 87 Q60 73 74 87',
-  toll:  'M43 88 Q60 70 77 88',
+// El cuerpo es un trazo grueso con puntas redondas, no un contorno relleno. A 38 px
+// —el tamaño mínimo del widget— un contorno con curvas finas se convierte en una
+// mancha; un trazo de 28 sobrevive la escala y sigue leyéndose como plátano.
+const CUERPO = 'M37 20 C65 41, 67 78, 45 99';
+
+// La boca es lo único que cambia de forma a mano. El resto es CSS.
+const BOCAS = {
+  calm:  'M52 74 Q60 82 68 73',
+  nudge: 'M53 77 L67 77',
+  angry: 'M52 82 Q60 71 68 80',
+  toll:  'M50 84 Q60 70 70 82',
 };
+
+// En toll el plátano ya no es un plátano: es puré. La boca vive más abajo y más ancha.
+const BOCA_TOLL = 'M49 76 Q60 64 71 76';
 
 const LEVELS = ['calm', 'nudge', 'angry', 'toll'];
 
@@ -27,7 +46,7 @@ function node(tag, attrs) {
   return n;
 }
 
-// Monta una bola dentro de `host`. Devuelve el elemento raíz.
+// Monta un plátano dentro de `host`. Devuelve el elemento raíz.
 export function mount(host) {
   if (!host) return null;
 
@@ -37,51 +56,80 @@ export function mount(host) {
 
   const svg = node('svg', { viewBox: '0 0 120 120', preserveAspectRatio: 'xMidYMid meet' });
 
-  // Los párpados se recortan contra el cuerpo: fuera de la bola no existen.
-  const clipId = 'peaje-ball-clip-' + ++seq;
+  // Los párpados se recortan contra LOS OJOS, no contra el cuerpo. Es más correcto que
+  // en la bola: un párpado es parte del ojo. Y de paso resuelve que un trazo no se
+  // puede usar como clipPath (clipPath solo entiende geometría rellena).
+  const clipId = 'peaje-ojos-' + ++seq;
   const defs = node('defs');
   const clip = node('clipPath', { id: clipId });
-  clip.appendChild(node('circle', { cx: 60, cy: 60, r: 42 }));
+  clip.appendChild(node('ellipse', { cx: 53, cy: 55, rx: 6, ry: 7 }));
+  clip.appendChild(node('ellipse', { cx: 67, cy: 55, rx: 6, ry: 7 }));
   defs.appendChild(clip);
   svg.appendChild(defs);
 
   const all = node('g', { class: 'ch-all' });
+  all.appendChild(node('ellipse', { class: 'ch-shadow', cx: 60, cy: 106, rx: 26, ry: 5 }));
 
-  all.appendChild(node('ellipse', { class: 'ch-shadow', cx: 60, cy: 106, rx: 30, ry: 5 }));
-
-  // Cuerpo: un círculo. Se deforma con transform desde CSS.
   const bodyG = node('g', { class: 'ch-body-g' });
-  bodyG.appendChild(node('circle', { class: 'ch-body', cx: 60, cy: 60, r: 42 }));
-  bodyG.appendChild(node('circle', { class: 'ch-shine', cx: 44, cy: 42, r: 11 }));
 
-  // Cara dentro del mismo grupo: se deforma junto al cuerpo, como debe ser.
+  // ── El plátano ───────────────────────────────────────────────────────────
+  const banana = node('g', { class: 'ch-banana' });
+  banana.appendChild(node('path', { class: 'ch-body', d: CUERPO }));
+  // Cabito y punta: los dos extremos se oscurecen antes que el resto, igual que
+  // en un plátano de verdad.
+  banana.appendChild(node('path', { class: 'ch-stem', d: 'M37 21 L34 12' }));
+  banana.appendChild(node('path', { class: 'ch-tip', d: 'M45 98 L43 105' }));
+  banana.appendChild(node('path', { class: 'ch-shine', d: 'M44 32 C58 46, 61 68, 52 84' }));
+
+  // Manchas: siempre están en el DOM, el CSS las revela por nivel. Así la transición
+  // entre estados es una animación de opacidad y no un salto de markup.
+  const spots = node('g', { class: 'ch-spots' });
+  const MANCHAS = [
+    [55, 40, 3.4, 2.6, -18], [66, 55, 4.2, 3.1, 12], [58, 68, 2.8, 2.2, 30],
+    [64, 82, 3.6, 2.5, -8], [49, 52, 2.4, 1.9, 20],
+  ];
+  for (const [cx, cy, rx, ry, rot] of MANCHAS) {
+    spots.appendChild(node('ellipse', { class: 'ch-spot', cx, cy, rx, ry, transform: `rotate(${rot} ${cx} ${cy})` }));
+  }
+  banana.appendChild(spots);
+  bodyG.appendChild(banana);
+
+  // ── El puré (solo en toll) ───────────────────────────────────────────────
+  // Pasado el umbral ya no hay plátano que salvar. El cambio de silueta dice más
+  // que cualquier color: es el único estado que se lee de un vistazo a 38 px.
+  //
+  // Va centrado alrededor de y=69, no pegado al piso del viewBox. La vista de peaje
+  // escala el personaje a min(150vw,150vh) centrado: cualquier cosa dibujada abajo
+  // se sale de la ventana y la cara desaparece.
+  const mush = node('g', { class: 'ch-mush' });
+  mush.appendChild(node('path', {
+    class: 'ch-mush-body',
+    d: 'M22 72 C26 57, 44 50, 60 52 C78 54, 96 60, 99 72 C102 83, 82 89, 60 89 C36 89, 19 83, 22 72 Z',
+  }));
+  bodyG.appendChild(mush);
+
+  // ── La cara ──────────────────────────────────────────────────────────────
   const face = node('g', { class: 'ch-face' });
-
-  // Dos elipses de ojos.
-  face.appendChild(node('ellipse', { class: 'ch-eye', cx: 45, cy: 56, rx: 9, ry: 11 }));
-  face.appendChild(node('ellipse', { class: 'ch-eye', cx: 75, cy: 56, rx: 9, ry: 11 }));
+  face.appendChild(node('ellipse', { class: 'ch-eye', cx: 53, cy: 55, rx: 6, ry: 7 }));
+  face.appendChild(node('ellipse', { class: 'ch-eye', cx: 67, cy: 55, rx: 6, ry: 7 }));
 
   const pupils = node('g', { class: 'ch-pupils' });
-  pupils.appendChild(node('ellipse', { class: 'ch-pupil', cx: 45, cy: 57.5, rx: 4.2, ry: 5.2 }));
-  pupils.appendChild(node('ellipse', { class: 'ch-pupil', cx: 75, cy: 57.5, rx: 4.2, ry: 5.2 }));
+  pupils.appendChild(node('ellipse', { class: 'ch-pupil', cx: 53, cy: 56, rx: 2.8, ry: 3.4 }));
+  pupils.appendChild(node('ellipse', { class: 'ch-pupil', cx: 67, cy: 56, rx: 2.8, ry: 3.4 }));
   face.appendChild(pupils);
 
-  // Párpados del color del cuerpo: bajan y dejan los ojos entrecerrados (toll).
-  // El recorte va en un grupo SIN transform: si viviera en el mismo grupo que se
-  // mueve, el clip se movería con él y los párpados se saldrían de la bola.
   const lidClip = node('g', { 'clip-path': `url(#${clipId})` });
   const lids = node('g', { class: 'ch-lids' });
-  lids.appendChild(node('rect', { class: 'ch-lid', x: 32, y: 36, width: 26, height: 16, rx: 3 }));
-  lids.appendChild(node('rect', { class: 'ch-lid', x: 62, y: 36, width: 26, height: 16, rx: 3 }));
+  lids.appendChild(node('rect', { class: 'ch-lid', x: 44, y: 38, width: 32, height: 18, rx: 2 }));
   lidClip.appendChild(lids);
   face.appendChild(lidClip);
 
   const brows = node('g', { class: 'ch-brows' });
-  brows.appendChild(node('path', { class: 'ch-brow', d: 'M35 41 L54 47' }));
-  brows.appendChild(node('path', { class: 'ch-brow', d: 'M85 41 L66 47' }));
+  brows.appendChild(node('path', { class: 'ch-brow', d: 'M46 43 L59 48' }));
+  brows.appendChild(node('path', { class: 'ch-brow', d: 'M74 43 L61 48' }));
   face.appendChild(brows);
 
-  const mouth = node('path', { class: 'ch-mouth', d: MOUTHS.calm });
+  const mouth = node('path', { class: 'ch-mouth', d: BOCAS.calm });
   face.appendChild(mouth);
 
   bodyG.appendChild(face);
@@ -99,10 +147,10 @@ export function mount(host) {
 
 function apply(inst, level) {
   inst.root.dataset.level = level;
-  inst.mouth.setAttribute('d', MOUTHS[level]);
+  inst.mouth.setAttribute('d', level === 'toll' ? BOCA_TOLL : BOCAS[level]);
 }
 
-// Cambia el humor de TODAS las bolas montadas.
+// Cambia el estado de TODOS los plátanos montados.
 export function setLevel(level) {
   const next = LEVELS.includes(level) ? level : 'calm';
   if (next === current) return current;

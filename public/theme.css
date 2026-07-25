@@ -1,0 +1,153 @@
+/* Peaje — capa de tokens. La cargan la landing Y el widget.
+   Por qué existe: había dos :root paralelos (index.html y style.css) que ya habían
+   divergido (--dim distinto, --hot con semántica distinta). Este archivo es el único
+   dueño de los tokens. El razonamiento está en DESIGN.md.
+
+   En widget.html va DESPUÉS de style.css: los alias de abajo tienen que ganar la
+   cascada sobre el :root vestigial de ese archivo.
+
+   Regla de oro para editar esto: no declares nada que toque un elemento del widget.
+   Solo tokens, más las tres reglas compartidas del final. Los estilos de la landing
+   viven dentro de index.html. */
+
+:root {
+  color-scheme: dark;
+
+  /* ── Tipografía ─────────────────────────────────────────────────────────── */
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "Cascadia Mono", Menlo, Consolas, monospace;
+
+  /* ── Tinta: un solo gradiente de gris para todo el producto ─────────────── */
+  --ink-0: #0a0b0e;   /* el pozo: bloques de comando */
+  --ink-1: #0d0e12;   /* fondo. CONGELADO: el QR lo tiene hardcodeado en index.js:199 */
+  --ink-2: #15161c;   /* panel */
+  --ink-3: #1b1c24;   /* panel elevado */
+  --line: #26272f;    /* hairline */
+  --line-2: #3a3b45;  /* borde de control secundario */
+  --dim-2: #4d4e5a;   /* metadata terciaria */
+  --dim: #8a8b98;     /* metadata */
+  --soft: #b6b7c4;    /* prosa secundaria */
+  --text: #e9e9ee;    /* prosa */
+
+  /* ── Los tres semánticos. Uno = un significado. No hay un cuarto. ───────── */
+  --calm: #2fbf71;    /* nadie te espera */
+  --warn: #ffd23f;    /* atención · la marca · el peaje */
+  --red: #ff4d4d;     /* alguien está bloqueado */
+
+  /* ── Radios: chicos a propósito. Los radios grandes son el look burbuja. ── */
+  --r-1: 4px;
+  --r-2: 8px;
+  --r-3: 10px;
+
+  --ease: cubic-bezier(.2, .8, .3, 1);
+
+  /* ── Alias de compatibilidad ────────────────────────────────────────────────
+     style.css usa estos nombres en 700 líneas. Redirigirlos aquí unifica el
+     sistema sin tocar un archivo que otro agente está editando. */
+  --bg: var(--ink-1);
+  --panel: var(--ink-2);
+  --panel-2: var(--ink-3);
+  --accent: var(--warn);
+  --green: var(--calm);
+}
+
+/* --hot NO se declara aquí a propósito: es el token dinámico "color de la deuda" y
+   lo reescribe body[data-level] en style.css:42-46. Declararlo en :root no lo
+   rompería (body gana por especificidad) pero sí confundiría a quien lea esto. */
+
+/* ── Reglas compartidas ─────────────────────────────────────────────────────
+   Solo tres, y cada una tiene que valer para la landing y para el widget. */
+
+/* 1 · Carita apagada. Es una posición de producto, no una preferencia: si el
+   producto sigue sirviendo sin la bola, la objeción "¿es otro tamagotchi?" se cae.
+   La bola sale del flex, no queda hueco.
+   El atributo va en <html>, no en <body>: settings.js corre desde el <head> y ahí
+   document.body todavía no existe. Ponerlo en html evita el flash de la bola
+   apareciendo y desapareciendo, y no pisa los data- que el widget usa en body. */
+html[data-face="0"] .ball-slot,
+html[data-face="0"] .toll-ball { display: none; }
+
+/* 2 · Acumulado del día. settings.js inyecta este nodo; no existe en el markup de
+   widget.html. Mono porque lo dice la máquina. */
+.hoy {
+  font-family: var(--font-mono);
+  font-size: clamp(8.5px, 2.3vw, 11px);
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--dim-2);
+  margin-top: 3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.hoy b {
+  color: var(--dim);
+  font-weight: 700;
+}
+
+/* 3 · Foco visible con el amarillo de la marca. Estaba solo en .btn del widget. */
+:focus-visible {
+  outline: 2px solid var(--warn);
+  outline-offset: 2px;
+}
+
+/* ── El plátano ─────────────────────────────────────────────────────────────
+   character.js dibuja un plátano en vez de una bola, reusando los mismos nombres
+   de clase. Todas las animaciones por nivel (breathe, stare, deform, vibrate,
+   loom, sway) siguen viviendo en style.css y no se tocan: acá solo se redefine
+   la geometría y el color. El razonamiento está en DESIGN.md §2.
+
+   La maduración ES la métrica: verde → amarillo → manchado → puré. Solo se mueve
+   --ball, que es el token del personaje. --hot (el número de la deuda) y --red
+   (permisos) siguen rojos: el rojo es la alarma, el plátano es el tiempo. */
+
+body[data-level="calm"]  { --ball: #9fd356; --ball-dark: #4a7a1e; }
+body[data-level="nudge"] { --ball: #f5c518; --ball-dark: #9a7400; }
+body[data-level="angry"] { --ball: #c8801f; --ball-dark: #6b3d08; }
+body[data-level="toll"]  { --ball: #7a5128; --ball-dark: #3c2410; }
+
+/* Cuerpo: trazo grueso, no contorno relleno. A 38 px un contorno con curvas finas
+   se vuelve una mancha; un trazo de 28 sobrevive la escala. */
+.ch-body {
+  fill: none;
+  stroke: var(--ball);
+  stroke-width: 28;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: stroke 600ms ease;
+}
+
+.ch-stem, .ch-tip {
+  fill: none;
+  stroke: var(--ball-dark);
+  stroke-width: 7;
+  stroke-linecap: round;
+  transition: stroke 600ms ease;
+}
+
+.ch-shine {
+  fill: none;
+  stroke: #fff;
+  stroke-width: 5;
+  stroke-linecap: round;
+  opacity: .16;
+}
+
+/* Las manchas están siempre en el DOM: el nivel solo cambia su opacidad, así que
+   madurar es una transición y no un salto de markup. */
+.ch-spot { fill: var(--ball-dark); opacity: 0; transition: opacity 700ms ease; }
+.peaje-char[data-level="nudge"] .ch-spot { opacity: .3; }
+.peaje-char[data-level="angry"] .ch-spot { opacity: .85; }
+
+/* Puré. Pasado el umbral ya no hay plátano que salvar, y el cambio de silueta se
+   lee de un vistazo incluso a 38 px, que es más de lo que logra cualquier color. */
+.ch-banana, .ch-mush { transition: opacity 500ms ease; }
+.ch-mush { opacity: 0; }
+.ch-mush-body { fill: var(--ball); transition: fill 600ms ease; }
+
+.peaje-char[data-level="toll"] .ch-banana { opacity: 0; }
+.peaje-char[data-level="toll"] .ch-mush { opacity: 1; }
+/* La cara baja al charco. Un puré no tiene ojos a media altura. */
+.peaje-char[data-level="toll"] .ch-face { transform: translateY(9px) scale(.86); }
+/* Ya está en el suelo: no proyecta sombra aparte. */
+.peaje-char[data-level="toll"] .ch-shadow { opacity: 0; }
