@@ -529,7 +529,9 @@ function buildSession() {
     if (par) {
       issue.textContent = `${par.esPR ? 'PR' : 'issue'} #${par.numero} · ${par.titulo}`;
       issue.href = `https://github.com/${par.repo}/issues/${par.numero}`;
-      issue.title = par.porque || (par.como === 'numero' ? 'Referenciado en la conversación' : '');
+      issue.title = par.porque || (par.como === 'referencia'
+        ? 'Referenciado en la conversación o en la rama'
+        : '');
       issue.dataset.como = par.como || '';
     }
 
