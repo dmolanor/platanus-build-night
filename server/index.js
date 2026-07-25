@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import express from 'express';
+import QRCode from 'qrcode';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -185,6 +186,22 @@ app.get('/api/hooks.json', (req, res) => {
       ],
     },
   });
+});
+
+// QR generado en el servidor, sin servicio externo: depender de una API de
+// terceros en vivo durante el pitch sería el único punto de red evitable.
+app.get('/api/qr.svg', async (req, res) => {
+  const token = tokenOf(req);
+  const url = `https://${req.get('host')}/widget.html?token=${encodeURIComponent(token)}`;
+  try {
+    const svg = await QRCode.toString(url, {
+      type: 'svg', errorCorrectionLevel: 'M', margin: 1,
+      color: { dark: '#0d0e12', light: '#ffffff' },
+    });
+    res.type('image/svg+xml').set('Cache-Control', 'no-store').send(svg);
+  } catch {
+    res.status(500).end();
+  }
 });
 
 app.get('/healthz', (_req, res) => res.type('text').send('ok'));

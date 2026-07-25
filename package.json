@@ -4,7 +4,9 @@
   "private": true,
   "type": "module",
   "description": "Tu eres el rate limiter. Peaje mide la deuda que le debes a tus agentes y te deja saldarla.",
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "start": "node server/index.js",
     "dev": "node --watch server/index.js"
@@ -12,6 +14,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.71.0",
     "dotenv": "^17.2.3",
-    "express": "^5.1.0"
+    "express": "^5.1.0",
+    "qrcode": "^1.5.4"
   }
 }

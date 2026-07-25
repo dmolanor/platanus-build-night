@@ -4,61 +4,144 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Peaje — tú eres el rate limiter</title>
+<link rel="icon" href="data:,">
 <style>
-  :root { color-scheme: dark; }
+  :root {
+    color-scheme: dark;
+    --bg: #0d0e12; --panel: #15161c; --line: #26272f;
+    --text: #e9e9ee; --dim: #8a8b98; --accent: #ffd23f; --hot: #ff5a5a;
+  }
   * { box-sizing: border-box; }
-  body { margin:0; background:#0d0e12; color:#e9e9ee; font:16px/1.55 ui-sans-serif,system-ui,sans-serif; }
-  main { max-width: 720px; margin: 0 auto; padding: 48px 20px 96px; }
-  h1 { font-size: 44px; margin: 0 0 8px; letter-spacing: -0.02em; }
-  .lede { color:#a9a9b8; font-size:19px; margin:0 0 40px; }
-  .step { border-left:2px solid #26272f; padding: 4px 0 28px 20px; }
-  .step b { display:block; color:#ffd23f; font-size:13px; letter-spacing:.08em; text-transform:uppercase; margin-bottom:6px; }
-  pre { background:#15161c; border:1px solid #26272f; border-radius:10px; padding:14px; overflow:auto; font-size:12px; max-height:280px; }
-  button { background:#ffd23f; color:#101014; border:0; border-radius:9px; padding:11px 18px; font-weight:700; font-size:15px; cursor:pointer; }
-  button.ghost { background:transparent; color:#e9e9ee; border:1px solid #3a3b45; }
-  code.tok { background:#15161c; border:1px solid #26272f; border-radius:6px; padding:3px 8px; font-size:15px; }
-  input { background:#15161c; border:1px solid #26272f; color:#e9e9ee; border-radius:8px; padding:9px 11px; font-size:15px; }
+  body { margin:0; background:var(--bg); color:var(--text);
+         font:16px/1.55 ui-sans-serif,system-ui,-apple-system,sans-serif; }
+  main { max-width: 760px; margin: 0 auto; padding: 56px 20px 96px; }
+
+  h1 { font-size: clamp(38px,9vw,60px); margin:0 0 6px; letter-spacing:-.03em; }
+  .lede { font-size: clamp(17px,4vw,21px); color:#c9c9d4; margin:0 0 6px; text-wrap:balance; }
+  .lede b { color:var(--text); }
+  .sub { color:var(--dim); font-size:15px; margin:0 0 44px; }
+
+  h2 { font-size:13px; letter-spacing:.1em; text-transform:uppercase; color:var(--accent);
+       margin:44px 0 14px; }
+
+  .beats { display:grid; gap:10px; margin:0 0 8px; padding:0; list-style:none; }
+  .beat { display:grid; grid-template-columns:auto 1fr; gap:12px; align-items:start;
+          background:var(--panel); border:1px solid var(--line); border-radius:11px; padding:13px 15px; }
+  .dot { width:11px; height:11px; border-radius:50%; margin-top:6px; }
+  .beat p { margin:0; font-size:15px; }
+  .beat p b { display:block; margin-bottom:1px; }
+  .beat p span { color:var(--dim); font-size:14px; }
+
+  .claim { border-left:3px solid var(--accent); padding:2px 0 2px 16px; margin:26px 0 0;
+           color:#c9c9d4; font-size:16px; text-wrap:balance; }
+  .claim b { color:var(--text); }
+
+  .step { border-left:2px solid var(--line); padding:2px 0 26px 20px; }
+  .step.last { border-color:var(--accent); }
+  .step b.n { display:block; color:var(--accent); font-size:12px; letter-spacing:.09em;
+              text-transform:uppercase; margin-bottom:7px; }
+  pre { background:var(--panel); border:1px solid var(--line); border-radius:10px;
+        padding:13px; overflow:auto; font-size:11.5px; max-height:230px; margin:10px 0 0; }
+  button { background:var(--accent); color:#181200; border:0; border-radius:9px;
+           padding:11px 17px; font-weight:700; font-size:15px; cursor:pointer; font-family:inherit; }
+  button.ghost { background:transparent; color:var(--text); border:1px solid #3a3b45; }
+  button:hover { filter:brightness(1.08); }
+  code.tok { background:var(--panel); border:1px solid var(--line); border-radius:6px;
+             padding:4px 9px; font-size:14px; user-select:all; }
+  input { background:var(--panel); border:1px solid var(--line); color:var(--text);
+          border-radius:8px; padding:9px 11px; font-size:15px; font-family:inherit; }
   .row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+  .hint { color:var(--dim); font-size:14px; }
+
+  .qr { display:flex; gap:18px; align-items:center; flex-wrap:wrap;
+        background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:16px; }
+  .qr img { width:150px; height:150px; background:#fff; border-radius:8px; padding:7px; display:block; }
+  .qr div { flex:1; min-width:220px; }
+  .qr p { margin:0 0 6px; }
+
+  footer { margin-top:52px; padding-top:20px; border-top:1px solid var(--line);
+           color:var(--dim); font-size:13.5px; }
 </style>
 </head>
 <body>
 <main>
   <h1>Peaje</h1>
   <p class="lede">Nueve agentes te están esperando a ti, y nadie mide ese costo.<br><b>Tú eres el rate limiter.</b></p>
+  <p class="sub">Corre en el navegador. No instalas nada.</p>
+
+  <h2>Qué hace</h2>
+  <ul class="beats">
+    <li class="beat">
+      <span class="dot" style="background:#2fbf71"></span>
+      <p><b>Cuenta los agent-minutos que pierdes.</b>
+         <span>Cada agente detenido esperando que decidas algo suma. Una sesión parada con 3 subagentes son 4 agentes parados, no 1.</span></p>
+    </li>
+    <li class="beat">
+      <span class="dot" style="background:#ffd23f"></span>
+      <p><b>Te lo dice antes de que sea caro.</b>
+         <span>Una ventana flota sobre tu terminal. Cambia de color, te habla, y al pasar el umbral te cobra peaje.</span></p>
+    </li>
+    <li class="beat">
+      <span class="dot" style="background:#ff4d4d"></span>
+      <p><b>Y te deja saldarlo sin volver a la terminal.</b>
+         <span>Cuando un agente se congela pidiendo permiso, lo apruebas o lo deniegas desde aquí — o desde el celular — con una recomendación del modelo.</span></p>
+    </li>
+    <li class="beat">
+      <span class="dot" style="background:#8a8b98"></span>
+      <p><b>Al volver, te reconstruye qué pasaba.</b>
+         <span>Lo caro no es saber a cuál sesión ir: es acordarse de qué estaba haciendo cada una. Y cuál conviene matar por estar dando vueltas.</span></p>
+    </li>
+  </ul>
+
+  <p class="claim">Si nadie decide en 85 segundos, Claude Code muestra el prompt normal en tu terminal.
+     <b>Peaje nunca cuelga un agente.</b> Y si estás en el teclado, ni siquiera se mete.</p>
+
+  <h2>Instalar · 30 segundos</h2>
 
   <div class="step">
-    <b>Paso 1 · tu token</b>
+    <b class="n">Paso 1 · tu token</b>
     <div class="row">
       <code class="tok" id="tok">…</code>
       <button class="ghost" id="nuevo">Otro token</button>
-      <span style="color:#7a7b88;font-size:14px">Compártelo con tu equipo: mismo token = misma cola.</span>
     </div>
+    <p class="hint" style="margin:9px 0 0">Compártelo con tu equipo: el mismo token es la misma cola, y cualquiera puede desbloquear al agente del otro.</p>
     <div class="row" style="margin-top:10px">
-      <label style="color:#a9a9b8;font-size:14px">Tu nombre:</label>
-      <input id="who" value="yo" size="12">
+      <label class="hint" for="who">Tu nombre:</label>
+      <input id="who" value="diego" size="12">
     </div>
   </div>
 
   <div class="step">
-    <b>Paso 2 · pega esto en ~/.claude/settings.json</b>
-    <div class="row" style="margin-bottom:10px">
+    <b class="n">Paso 2 · pégalo en ~/.claude/settings.json</b>
+    <div class="row">
       <button id="copiar">Copiar bloque de hooks</button>
-      <span style="color:#7a7b88;font-size:14px">Sin instalar nada. Son hooks HTTP nativos.</span>
+      <span class="hint">Son hooks HTTP nativos de Claude Code.</span>
     </div>
+    <p class="hint" style="margin:9px 0 0">Va <b>dentro</b> del objeto que ya tienes, como una clave más. Reinicia Claude Code después.</p>
     <pre id="bloque">cargando…</pre>
   </div>
 
-  <div class="step" style="border-color:#ffd23f">
-    <b>Paso 3 · abre el widget</b>
+  <div class="step last">
+    <b class="n">Paso 3 · abre el widget</b>
     <div class="row">
-      <button id="abrir">Abrir widget flotante</button>
-      <button class="ghost" id="demo">Modo demo</button>
+      <button id="abrir">Abrir ventana flotante</button>
+      <button class="ghost" id="demo">Ver demo</button>
     </div>
-    <p style="color:#7a7b88;font-size:14px;margin-bottom:0">
-      La ventana flota sobre la terminal. Requiere Chrome o Edge.
-      Ábrela también en el celular: es la misma URL.
-    </p>
+    <p class="hint" style="margin:9px 0 0">Requiere Chrome o Edge. Flota sobre todas tus ventanas.</p>
+
+    <div class="qr" style="margin-top:16px">
+      <img id="qr" alt="Código QR para abrir el widget en el celular">
+      <div>
+        <p><b>Ábrelo también en el celular.</b></p>
+        <p class="hint">Escanea y decide los permisos desde el teléfono. Es donde estás cuando te alejaste del teclado — que es todo el punto.</p>
+      </div>
+    </div>
   </div>
+
+  <footer>
+    Solo se envían eventos de hook (herramienta, comando, último mensaje). Nunca tu código ni tu transcript.
+    Efímeros, en memoria, sin persistencia.
+  </footer>
 </main>
 
 <script>
@@ -66,18 +149,16 @@ const $ = (s) => document.querySelector(s);
 let token = new URLSearchParams(location.search).get('token') || localStorage.getItem('peaje_token');
 
 async function ensureToken() {
-  if (!token) {
-    const r = await fetch('/api/token/new');
-    token = (await r.json()).token;
-  }
+  if (!token) token = (await (await fetch('/api/token/new')).json()).token;
   localStorage.setItem('peaje_token', token);
   $('#tok').textContent = token;
+  $('#qr').src = `/api/qr.svg?token=${encodeURIComponent(token)}`;
   await pintarBloque();
 }
 
 async function pintarBloque() {
   const who = encodeURIComponent($('#who').value || 'yo');
-  const r = await fetch(`/api/hooks.json?token=${token}&who=${who}`);
+  const r = await fetch(`/api/hooks.json?token=${encodeURIComponent(token)}&who=${who}`);
   $('#bloque').textContent = JSON.stringify(await r.json(), null, 2);
 }
 
@@ -88,23 +169,22 @@ $('#copiar').onclick = async () => {
   $('#copiar').textContent = '¡Copiado!';
   setTimeout(() => ($('#copiar').textContent = 'Copiar bloque de hooks'), 1500);
 };
-$('#demo').onclick = () => fetch(`/api/demo/start?token=${token}`, { method: 'POST' });
+$('#demo').onclick = () => fetch(`/api/demo/start?token=${encodeURIComponent(token)}&ramp=1`, { method: 'POST' });
 
-// Document PiP necesita un gesto del usuario. Este clic es ese gesto —
-// y de paso habilita la voz (autoplay bloqueado sin interacción previa).
+// Document PiP exige un gesto del usuario. Este clic ES ese gesto — y de paso
+// habilita la voz, que el navegador bloquea hasta que haya interacción.
 $('#abrir').onclick = async () => {
-  const url = `/widget.html?token=${token}`;
+  const url = `/widget.html?token=${encodeURIComponent(token)}`;
   if (!('documentPictureInPicture' in window)) {
-    window.open(url, 'peaje', 'width=360,height=260');
+    window.open(url, 'peaje', 'width=380,height=280');
     return;
   }
-  const pip = await documentPictureInPicture.requestWindow({ width: 360, height: 260 });
-  const doc = pip.document;
-  doc.body.style.margin = '0';
-  const frame = doc.createElement('iframe');
+  const pip = await documentPictureInPicture.requestWindow({ width: 380, height: 280 });
+  pip.document.body.style.margin = '0';
+  const frame = pip.document.createElement('iframe');
   frame.src = url;
   frame.style.cssText = 'border:0;width:100%;height:100vh;display:block';
-  doc.body.appendChild(frame);
+  pip.document.body.appendChild(frame);
 };
 
 ensureToken();
