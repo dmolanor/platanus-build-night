@@ -111,6 +111,8 @@ function getSession(t, sessionId, payload, who) {
       tasksDone: 0,
       lastTask: null,
       subagents: 0,
+      debtMs: 0,            // agent-milisegundos acumulados, ver acumular()
+      tickAt: Date.now(),   // hasta cuándo ya se cobró
       title: null,
       lastPrompt: null,
       model: null,
@@ -128,12 +130,16 @@ function getSession(t, sessionId, payload, who) {
 
 // Cambiar de estado reinicia el reloj de espera. Repetir el mismo estado no lo reinicia:
 // si el agente sigue esperando, la deuda debe seguir subiendo.
+//
+// Pasar de un motivo de espera a OTRO tampoco lo reinicia: `needs_input` → `idle` lo
+// dispara el agente cansándose de esperar, no tú volviendo. La sesión nunca dejó de
+// esperarte, así que su reloj no puede empezar de cero.
 function setStatus(s, status, reason) {
-  if (s.status !== status || s.reason !== reason) {
-    s.status = status;
-    s.reason = reason;
-    s.since = Date.now();
-  }
+  if (s.status === status && s.reason === reason) return;
+  const seguiaEsperando = DEBT_STATUSES.has(s.status) && DEBT_STATUSES.has(status);
+  s.status = status;
+  s.reason = reason;
+  if (!seguiaEsperando) s.since = Date.now();
 }
 
 // ── Superficies: qué archivo está tocando cada agente ────────────────────────
@@ -270,8 +276,13 @@ export function ingest(token, who, payload, kind) {
 
     case 'SubagentStop':
       s.subagents = Math.max(0, s.subagents - 1);
-      // El subagente terminó pero la sesión principal sigue: no es deuda todavía.
-      setStatus(s, 'working', null);
+      // Que un subagente termine NO significa que volviste. Si la principal está
+      // congelada esperándote, sigue congelada. Marcarla "trabajando" hacía dos
+      // destrozos a la vez: la sacaba de la lista de las que te esperan (por eso
+      // veías conversaciones pausadas diciendo "trabajando") y le reiniciaba el
+      // reloj, así que su deuda caía a cero. Solo vuelve a "trabajando" si de
+      // verdad estaba trabajando.
+      if (!DEBT_STATUSES.has(s.status)) setStatus(s, 'working', null);
       break;
 
     case 'StopFailure':
@@ -316,6 +327,26 @@ export function waitedMsFor(t, s, now = Date.now()) {
   return Math.max(0, now - s.since) * (t.demoSpeed || 1);
 }
 
+// La deuda es una INTEGRAL, no una multiplicación.
+//
+// Antes era `tiempo_esperando × agentes_de_AHORA`, y eso reescribe el pasado: cuatro
+// agentes parados cinco minutos son 20 agent-minutos, y que después termine un
+// subagente no convierte esos 20 en 15. Ya se perdieron. Por eso el número saltaba
+// hacia abajo en vez de crecer.
+//
+// Se suma tramo a tramo, cada uno al ritmo que tenía ese tramo. Es idempotente en el
+// tiempo: que lo llamen dos clientes a la vez no cobra doble, porque cada llamada
+// solo cobra desde `tickAt`.
+function acumular(t, s, now, congelado) {
+  const desde = s.tickAt || now;
+  if (!congelado && now > desde && DEBT_STATUSES.has(s.status)) {
+    s.debtMs += (now - desde) * (1 + (s.subagents || 0)) * (t.demoSpeed || 1);
+  }
+  // `tickAt` avanza SIEMPRE, incluso congelado: si no, al volver de almorzar se
+  // cobraría de golpe todo el rato en que no estabas.
+  s.tickAt = now;
+}
+
 export function levelFor(totalWaitedMs) {
   if (totalWaitedMs >= TOLL_MS) return 'toll';
   if (totalWaitedMs >= ANGRY_MS) return 'angry';
@@ -348,11 +379,13 @@ export function snapshot(token) {
   let total = 0;
   for (const s of t.sessions.values()) {
     const stale = now - s.lastEventAt > STALE_MS;
+    // Cobrar ANTES de leer. Congelado si no estás o si la sesión ya está abandonada.
+    acumular(t, s, now, away || stale);
     const status = stale ? 'stale' : s.status;
     const waitedMs = stale ? 0 : waitedMsFor(t, s, clockNow);
     // Una sesión parada con N subagentes tiene N+1 agentes parados.
     const blockedAgents = stale ? 0 : 1 + (s.subagents || 0);
-    total += waitedMs * blockedAgents;
+    total += s.debtMs;
     sessions.push({
       blockedAgents,
       sessionId: s.sessionId,
@@ -366,7 +399,7 @@ export function snapshot(token) {
       loopCount: s.loopCount,
       why: whyFor(s, status),
       action: actionFor(s, status),
-      costMs: waitedMs * blockedAgents,
+      costMs: s.debtMs,
       // Cómo llamar a esta sesión para que un humano la reconozca. El título de
       // la conversación si existe; si no, qué le pediste; si no, el id corto.
       label: s.title || s.lastPrompt || `sesión ${s.sessionId.slice(0, 6)}`,
@@ -484,14 +517,21 @@ const REASON_WEIGHT = { permission: 3.0, needs_input: 2.5, failed: 2.0, complete
 
 export function score(s) {
   const w = REASON_WEIGHT[s.reason] || 1.0;
-  return s.waitedMs * (s.blockedAgents || 1) * w * (1 + (s.loopCount || 0));
+  // costMs ya es la integral acumulada (tiempo × agentes parados, tramo a tramo).
+  // Volver a multiplicar por blockedAgents contaría los subagentes dos veces.
+  const costo = s.costMs != null ? s.costMs : s.waitedMs * (s.blockedAgents || 1);
+  return costo * w * (1 + (s.loopCount || 0));
 }
 
 export function resetDebt(token) {
   const t = TOKENS.get(token);
   if (!t) return;
   const now = Date.now();
-  for (const s of t.sessions.values()) s.since = now;
+  for (const s of t.sessions.values()) {
+    s.since = now;
+    s.debtMs = 0;      // "ya volví": la deuda se salda, no se sigue arrastrando
+    s.tickAt = now;
+  }
   t.spoken.clear();
 }
 
@@ -527,6 +567,10 @@ export function startDemo(token, speed, ramp = false) {
       sessionId: d.sessionId, repo: d.repo, who: d.who, status: d.status, reason: d.reason,
       since: now - (ramp ? 0 : d.ageS * 1000), lastMessage: d.lastMessage, loopCount: d.loopCount,
       subagents: d.subagents, branch: d.branch || null, refs: new Set(d.refs || []),
+      // La deuda sembrada tiene que ser la MISMA integral que acumularía sola:
+      // segundos de antigüedad × agentes parados. Con ramp arranca en cero y sube en vivo.
+      debtMs: (ramp || !DEBT_STATUSES.has(d.status)) ? 0 : d.ageS * 1000 * (1 + d.subagents),
+      tickAt: now,
       tasksDone: d.tareas ? d.tareas[0] : 0, tasksOpen: d.tareas ? d.tareas[1] : 0, lastTask: null,
       title: d.title, lastPrompt: null, model: null,
       recentTools: [], touched: new Map(d.touched || []), lastEventAt: now,
