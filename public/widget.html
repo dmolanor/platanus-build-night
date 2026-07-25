@@ -77,6 +77,10 @@ import { mount, setLevel } from './character.js';
 
 const TOKEN = new URLSearchParams(location.search).get('token') || '';
 const QT = encodeURIComponent(TOKEN);
+// El hero de la landing monta este mismo archivo en un iframe. Ahí es una muestra de
+// cómo se ve, no un widget que te acompaña: no habla nunca. Y no puede leer el mute
+// de localStorage porque lo COMPARTE con el widget de verdad (mismo origen).
+const ES_MUESTRA = new URLSearchParams(location.search).has('preview');
 const TOLL_GRACE_MS = 30_000;    // tras verlo, no vuelvas a caer en deuda alta enseguida
 
 const $ = (id) => document.getElementById(id);
@@ -97,7 +101,7 @@ const S = {
   tollGraceUntil: 0,
   paying: false,
   offline: true,
-  muted: localStorage.getItem('pings_mute') === '1',
+  muted: ES_MUESTRA || localStorage.getItem('pings_mute') === '1',
   spoken: new Set(),
   audio: null,            // el <audio> de ElevenLabs sonando ahora, para poder cortarlo
   deadlines: new Map(),   // permitId -> timestamp absoluto de expiración
@@ -166,6 +170,15 @@ try {
   if (synth && synth.addEventListener) synth.addEventListener('voiceschanged', pickVoice);
 } catch (_) {}
 
+// Corta lo que esté sonando, por los dos canales. Sintetizar tarda ~1 s y la
+// escalada puede producir dos frases seguidas: sin esto, la segunda arrancaba
+// encima de la primera y se oían las dos a la vez.
+function cortarVoz() {
+  try { if (S.audio) { S.audio.pause(); S.audio.currentTime = 0; } } catch (_) {}
+  S.audio = null;
+  try { if (synth) synth.cancel(); } catch (_) {}
+}
+
 // Voz del navegador: el suelo. Siempre disponible, no depende de la red.
 function sayNative(t) {
   if (!synth) return;
@@ -181,24 +194,31 @@ function sayNative(t) {
 
 // ElevenLabs primero, navegador si falla. El servidor responde 204 sin key, 429
 // si se pasó del rate limit; en ambos casos `r.ok` es false y caemos al suelo.
+//
+// Gana la MÁS NUEVA, no la primera: si mientras sintetizamos una frase llega otra,
+// la vieja ya no describe el estado y no vale la pena oírla. Por eso `turno`.
+let turno = 0;
 async function say(text) {
   const t = typeof text === 'string' ? text.trim() : '';
   if (!t || S.spoken.has(t)) return;          // nunca repetir lo ya dicho
   S.spoken.add(t);
   if (S.spoken.size > 400) S.spoken.clear();
   if (S.muted) return;
+  const mio = ++turno;
   try {
     const r = await fetch(`/api/voice?token=${QT}&text=${encodeURIComponent(t)}`);
     if (r.ok && r.status !== 204) {
-      const a = new Audio(URL.createObjectURL(await r.blob()));
+      const blob = await r.blob();
+      if (mio !== turno || S.muted) return;    // llegó una más nueva, o se apagó
+      const a = new Audio(URL.createObjectURL(blob));
       a.addEventListener('ended', () => { try { URL.revokeObjectURL(a.src); } catch (_) {} });
-      if (S.muted) return;                     // se apagó mientras sintetizaba
+      cortarVoz();                             // silencio antes de hablar
       S.audio = a;                             // referencia para poder cortarla
       await a.play();                          // si el autoplay lo bloquea, rechaza → catch
       return;
     }
   } catch (_) {}
-  if (!S.muted) sayNative(t);
+  if (mio === turno && !S.muted) { cortarVoz(); sayNative(t); }
 }
 
 // Un solo texto, dos canales. `announce` deduplica ANTES de que say() marque el
@@ -230,7 +250,7 @@ function showBubble(text) {
 // Basta un gesto acá dentro para desbloquear el canal. Cualquier clic sirve.
 let audioListo = false;
 function desbloquearAudio() {
-  if (audioListo) return;
+  if (audioListo || ES_MUESTRA) return;   // la muestra no habla: no hay canal que abrir
   audioListo = true;
   try {
     const a = new Audio('data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=');
@@ -255,13 +275,13 @@ function paintMute() {
 $('mute').addEventListener('click', () => {
   S.muted = !S.muted;
   localStorage.setItem('pings_mute', S.muted ? '1' : '0');
-  if (S.muted) {
-    try { synth && synth.cancel(); } catch (_) {}
-    try { S.audio && S.audio.pause(); S.audio = null; } catch (_) {}
-  }
+  if (S.muted) { turno++; cortarVoz(); }   // turno++ mata también lo que se esté sintetizando
   paintMute();
 });
 paintMute();
+// En la muestra el botón no va: su clic escribe en el localStorage COMPARTIDO, así
+// que desde el hero podrías apagarle la voz al widget de verdad sin darte cuenta.
+if (ES_MUESTRA) $('mute').hidden = true;
 
 // ── Listas con reconciliación por clave (sin innerHTML, sin parpadeo) ───────
 function syncList(container, items, keyOf, build) {

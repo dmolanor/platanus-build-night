@@ -92,12 +92,18 @@
   html.setAttribute('data-face', S.face ? '1' : '0');
   html.setAttribute('data-money', S.money ? '1' : '0');
 
+  // `preview=1`: el widget del hero de la landing. Es una MUESTRA, y como vive en un
+  // iframe del mismo origen comparte este localStorage — sin esta marca, su `voice=0`
+  // le apagaría la voz al widget de verdad con solo abrir la página.
+  var esPreview = params.has('preview');
+
   // Sembrar el mute SOLO si el param vino explícito. Si no, respetamos lo que el
   // usuario haya apretado dentro del widget: sobreescribirlo en cada recarga sería
   // pelearle al botón que ya existe.
-  if (params.has('voice')) setLs(K.voice, S.voice ? '0' : '1');
+  if (params.has('voice') && !esPreview) setLs(K.voice, S.voice ? '0' : '1');
 
-  window.PINGS = { read: read, save: save, query: query, DEFAULTS: DEFAULTS, SENS: SENS };
+  window.PINGS = { read: read, save: save, query: query, DEFAULTS: DEFAULTS,
+                   SENS: SENS, preview: esPreview };
 
   // ── Acumulado del día, solo en el widget ───────────────────────────────────
   // Va por fetch a /api/state cada 10 s en vez de por el SSE. Desacoplado a

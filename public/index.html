@@ -694,6 +694,12 @@ async function pintarBloque() {
 
 function pintarQR() { if (token) $('#qr').src = `/api/qr.svg?${PINGS.query(token)}`; }
 
+// El hero es una MUESTRA de cómo se ve, no un widget que te acompaña: `voice=0`
+// siempre, pase lo que pase en ajustes. Con la voz encendida hablaba solo por
+// abrir la página —y encima con su propio token, así que se solapaba con el
+// widget de verdad. Todo el que apunte el iframe pasa por acá.
+function previewSrc() { return `/widget.html?${PINGS.query(PREVIEW)}&voice=0&preview=1`; }
+
 // ── Ajustes ────────────────────────────────────────────────────────────────
 // El iframe se recarga con debounce: cada recarga reinicia el SSE, así que no conviene
 // hacerlo en cada tecla del campo de tarifa.
@@ -714,7 +720,7 @@ function aplicar(recargar) {
   pintarHoy();
   if (!recargar || !PREVIEW) return;
   clearTimeout(t);
-  t = setTimeout(() => { $('#preview').src = `/widget.html?${PINGS.query(PREVIEW)}`; }, 450);
+  t = setTimeout(() => { $('#preview').src = previewSrc(); }, 450);
 }
 
 function toggle(id, key) {
@@ -837,7 +843,7 @@ $('#copiar').onclick = async () => {
 $('#demo').onclick = async () => {
   await ensurePreview();
   await fetch(`/api/demo/start?token=${encodeURIComponent(PREVIEW)}&ramp=1`, { method: 'POST' });
-  $('#preview').src = `/widget.html?${PINGS.query(PREVIEW)}`;
+  $('#preview').src = previewSrc();
 };
 
 // Document PiP exige un gesto del usuario. Este clic ES ese gesto, y de paso habilita la
@@ -887,7 +893,7 @@ $('#s-rate').value = s0.rate;
 aplicar(false);
 ensureToken();
 sembrar().then(() => {
-  $('#preview').src = `/widget.html?${PINGS.query(PREVIEW)}`;
+  $('#preview').src = previewSrc();
   pintarHoy();
 });
 setInterval(sembrar, 30000);
