@@ -120,6 +120,27 @@ Solo cuentan los eventos que produce **el humano**: escribir un prompt o decidir
 Sin señales humanas por 30 min, la deuda se **congela** —no se borra ni crece toda la noche— y nos
 callamos. **La intervención se dispara cuando vuelves.** No hay a quién intervenir en una silla vacía.
 
+### Y cuando no hay deuda: qué trabajo no tiene a nadie encima
+
+*"Nadie te está esperando. Estás al día"* era un **callejón sin salida**: te felicita y te deja sin
+nada que hacer, justo en el estado donde la herramienta debería servir más.
+
+Ahora, sin deuda, Pings empareja tus conversaciones con los issues y PRs abiertos y te muestra
+**lo que nadie empezó**. Dos pasadas, en este orden:
+
+1. **Determinista primero.** Una referencia `#123` en la conversación o una rama `fix/123-…` no
+   necesita modelo y **nunca se equivoca**.
+2. **La IA solo para los huérfanos.** Lo que no casó por número se empareja por semejanza, con el
+   *porqué* explícito.
+
+**El PAT de GitHub nunca toca nuestro servidor.** `api.github.com` acepta CORS, así que consulta el
+navegador; el token vive en `localStorage` y a nosotros nos llegan **solo los títulos**
+(`server/index.js:476`, `public/gh.js`). No custodiamos ninguna credencial tuya — que es la única
+respuesta buena a *"¿y esto es seguro?"*.
+
+> Ojo con el límite: esto **no** es un dashboard de GitHub (ver §7). Es la respuesta a "¿y ahora
+> qué?", no una vista de issues.
+
 ### El dinero, dicho con precisión
 
 **Esperar no quema tokens.** Un agente bloqueado cuesta $0. Lo que se pierde es **capacidad
@@ -163,6 +184,7 @@ Ahora: solo ASCII imprimible, denylist de banderas, y `git remote`/`git branch` 
 | Ranking por costo · brief · detección de loop · avance por tareas | **Sí. Es la tesis** |
 | Desbloqueo remoto · piloto automático | **Sí.** Eliminan la espera, no solo la miden |
 | Peso por subagentes · presencia · etiqueta de sesión | **Sí.** Hacen la métrica verdadera y legible |
+| Emparejar conversaciones con issues y mostrar lo huérfano | **Sí.** Cierra el callejón sin salida de "estás al día", que era el único estado sin respuesta |
 | Costo en dinero | Marginal. Hace legible el número |
 | Detección de colisión entre agentes | **No.** Es la tesis de otro producto (airlock). Se queda como *razón* del consejo, no como feature |
 | Tareas como feature propia | **No.** Entró por leer beads. Solo vale como señal de avance |
@@ -181,7 +203,13 @@ Decirlo en voz alta suma: demuestra criterio de scope.
 - ❌ **Bloqueo de pantalla.** Se construyó y **se eliminó**: tomaba una ventana de 380 px que
   cerrabas con un clic. Windows impide de raíz que un proceso sin admin bloquee la pantalla, así
   que la alternativa honesta no era hacerlo más agresivo sino quitarlo.
+- ❌ **La pantalla intermedia de deuda alta.** Era el último resto del bloqueo: un cartel rojo con un
+  botón que decía *"dime a dónde volver"* — pedirte que pidas lo único que el producto promete hacer
+  solo. Ahora en deuda alta **el brief aparece directo**. Y cerrarlo es el gesto de "ya volví": es lo
+  que resetea la deuda. Mirarlo no la resetea; volver sí.
 - ❌ Dashboard de PRs e issues de GitHub — GitHub ya lo hace bien, y nos volvería la categoría muerta.
+  Emparejar conversaciones con issues (§4) **no es eso**: no listamos issues, decimos cuál no tiene
+  a nadie encima.
 - ❌ Un personaje por sesión — ya existe tres veces; el nuestro es **uno solo**, y representa la deuda.
 - ❌ Lectura de transcripts, base de datos, cuentas, login.
 
@@ -194,13 +222,14 @@ Tenerlas enunciadas primero es la diferencia entre criterio y hueco.
 1. **Evidencia N=1.**
 2. **Confianza a escala de equipo:** cualquiera con el token aprueba en la máquina de cualquiera.
    Es intencional para dos socios; no escala a una org. Permisos por persona es lo siguiente.
-3. **No hay revocación.** Rotar el token genera otro, pero el viejo vive hasta el TTL de 12 h.
-   Un `DELETE /api/token` son tres líneas y da revocación real **sin necesidad de login**.
+3. ~~No hay revocación.~~ **Resuelto.** `DELETE /api/token` (`server/index.js:466`) mata el token al
+   instante en vez de dejarlo vivo hasta el TTL de 12 h, y de paso borra el brief cacheado, que lleva
+   etiquetas y mensajes de tus sesiones. Revocación real **sin necesidad de login**.
 4. **El token viaja en la query string.** El `Referer` ya no lo filtra (los navegadores modernos
    recortan path y query al salir del origen), pero **los logs de Render y Cloudflare sí lo ven**.
    → *Frase lista:* "Es el mismo modelo de confianza que un webhook de Slack o un share link de
    Figma: quien tiene el enlace, entra. Lo elegimos porque el onboarding es pegar un JSON, no crear
-   una cuenta. Lo que no tenemos todavía es revocación inmediata, y lo sabemos."
+   una cuenta. Y si se filtra, se revoca en un clic."
 5. **Solo funciona con Claude Code.**
 6. **Los repos se emparejan por nombre**, así que dos repos distintos llamados `api` darían falso
    positivo en colisión.
@@ -227,6 +256,9 @@ Tenerlas enunciadas primero es la diferencia entre criterio y hueco.
 | **Cuentas del pitch** | La deuda sube `agentes × reloj` por minuto real. Con 3 agentes a 4×: bravo a los 25 s, nivel alto a los 50 s |
 | **Voz** | ElevenLabs (Charlie, `stability 0.7`), con caché, tope horario y **fallback a `speechSynthesis`** ante cualquier fallo |
 | **Sin API key** | Todo funciona con el fallback determinista. Probado |
+| **Reabrir el brief no lo degrada** | El cooldown de 10 s protege la API key, pero devolvía el fallback: abrir, cerrar y reabrir bajaba el ranking a la versión mecánica y **parecía que la IA falló**. Ahora devuelve el último brief bueno (60 s de vida) |
+| **El brief tarda ~4 s** | Ese rato la ventana dice "Reconstruyendo qué estaba pasando…" y está vacía. **Es texto para decir en voz alta, no un hueco que disimular** |
+| **Verificado a 380×280** | El widget se probó al tamaño real de la PiP, no solo por piezas. Los cinco defectos serios de la última ronda salieron de mirarlo corriendo |
 | **El QR lleva tu token dentro** | **Usa un token desechable para la demo.** Proyectarlo deja que cualquiera en la sala apruebe permisos en tu portátil |
 
 ---
@@ -243,3 +275,5 @@ Tenerlas enunciadas primero es la diferencia entre criterio y hueco.
 | ¿Y si se cae la red o la API key? | Fallback determinista en todo. Probado cortando la key |
 | ¿Mandas mi código? | **No digas "nunca".** Ver debilidad #8 |
 | ¿Me bloqueas la máquina? | No, y no pretendo: lo construimos y lo quitamos. Ver §7 |
+| ¿Le doy mi token de GitHub a un servidor ajeno? | No. El PAT se queda en tu navegador y es él quien le pregunta a GitHub; a nosotros nos llegan los títulos. Nunca custodiamos una credencial tuya |
+| ¿Y si me roban el token de Pings? | Se revoca en un clic. No hay cuenta que recuperar porque no hay cuenta |
