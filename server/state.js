@@ -59,6 +59,7 @@ function getSession(t, sessionId, payload, who) {
       lastMessage: null,
       loopCount: 0,
       recentTools: [],
+      touched: new Map(),   // superficie -> cuándo la tocó por última vez
       tasksOpen: 0,
       tasksDone: 0,
       lastTask: null,
@@ -82,6 +83,56 @@ function setStatus(s, status, reason) {
     s.since = Date.now();
   }
 }
+
+// ── Superficies: qué archivo está tocando cada agente ────────────────────────
+// El hook PermissionRequest nos entrega la intención de un agente JUSTO ANTES de
+// ejecutarla, y ya estamos sosteniendo esa petición. Si además sabemos qué están
+// tocando las demás sesiones, podemos ver la colisión cuando todavía es gratis:
+// antes de que se escriba la primera línea, no en el merge.
+
+const COLLISION_WINDOW_MS = 20 * 60 * 1000;
+
+// Normaliza a una ruta relativa al repo. Sin esto, dos personas en máquinas
+// distintas (C:\Users\diego\buk-api\... vs /home/sofia/buk-api/...) nunca
+// coincidirían, y el cruce entre personas es justo lo que no tiene competencia.
+export function surfaceOf(filePath, repo) {
+  if (!filePath) return null;
+  const p = String(filePath).replace(/\\/g, '/').replace(/^\.\//, '').toLowerCase();
+  if (!p.includes('/') && !p.includes('.')) return null;
+  const r = String(repo || '').toLowerCase();
+  const i = r ? p.lastIndexOf('/' + r + '/') : -1;
+  if (i >= 0) return p.slice(i + 1);
+  const parts = p.split('/').filter(Boolean);
+  return parts.slice(-3).join('/');
+}
+
+function surfaceFromPayload(payload, repo) {
+  const i = payload.tool_input || {};
+  return surfaceOf(i.file_path || i.notebook_path || i.path, repo);
+}
+
+// ¿Otra sesión del mismo token está tocando esta superficie ahora mismo?
+export function collisionFor(token, sessionId, surface, now = Date.now()) {
+  const t = TOKENS.get(token);
+  if (!t || !surface) return null;
+  let best = null;
+  for (const s of t.sessions.values()) {
+    if (s.sessionId === sessionId) continue;
+    const at = s.touched?.get(surface);
+    if (!at || now - at > COLLISION_WINDOW_MS) continue;
+    if (!best || at > best.at) best = { at, s };
+  }
+  if (!best) return null;
+  return {
+    who: best.s.who,
+    repo: best.s.repo,
+    sessionId: best.s.sessionId,
+    surface,
+    agoMs: now - best.at,
+  };
+}
+
+export { surfaceFromPayload };
 
 // Firma de una llamada a herramienta, para detectar que el agente se está dando vueltas.
 function toolSignature(payload) {
@@ -125,6 +176,13 @@ export function ingest(token, who, payload, kind) {
       if (s.recentTools.length > 8) s.recentTools.shift();
       const repeats = s.recentTools.filter((x) => x === sig).length;
       s.loopCount = repeats >= 3 ? repeats - 2 : 0;
+
+      // Qué archivo acaba de tocar. Es lo que permite ver la colisión después.
+      const surface = surfaceFromPayload(payload, s.repo);
+      if (surface) {
+        s.touched.set(surface, Date.now());
+        if (s.touched.size > 40) s.touched.delete(s.touched.keys().next().value);
+      }
       break;
     }
 
@@ -326,8 +384,11 @@ export function startDemo(token, speed, ramp = false) {
       lastMessage: 'Quiero borrar db/migrations/ para regenerarlas desde cero.', loopCount: 0, subagents: 0, ageS: 40 },
     { sessionId: 'demo-checkout', repo: 'buk-api', who: 'diego', status: 'done', reason: 'completed',
       lastMessage: 'Listo. PR #212 abierto, solo falta que lo confirmes.', loopCount: 0, subagents: 0, ageS: 15 },
+    // Sofía lleva rato en el mismo archivo que el permiso de abajo va a pedir:
+    // así la colisión se ve en la demo sin tener que orquestar dos máquinas.
     { sessionId: 'demo-ui', repo: 'buk-web', who: 'sofía', status: 'waiting', reason: 'needs_input',
-      lastMessage: 'Sigo viendo el mismo error de hidratación. Intento otra vez.', loopCount: 3, subagents: 3, ageS: 70 },
+      lastMessage: 'Sigo viendo el mismo error de hidratación. Intento otra vez.', loopCount: 3, subagents: 3, ageS: 70,
+      touched: [['buk-api/src/auth/client.ts', now - 6 * 60 * 1000]] },
     { sessionId: 'demo-infra', repo: 'buk-infra', who: 'diego', status: 'working', reason: null,
       lastMessage: null, loopCount: 0, subagents: 0, ageS: 5 },
   ];
@@ -336,7 +397,7 @@ export function startDemo(token, speed, ramp = false) {
       sessionId: d.sessionId, repo: d.repo, who: d.who, status: d.status, reason: d.reason,
       since: now - (ramp ? 0 : d.ageS * 1000), lastMessage: d.lastMessage, loopCount: d.loopCount,
       subagents: d.subagents, tasksOpen: 0, tasksDone: 0, lastTask: null,
-      recentTools: [], lastEventAt: now,
+      recentTools: [], touched: new Map(d.touched || []), lastEventAt: now,
     });
   }
   return t;

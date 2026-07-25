@@ -24,6 +24,7 @@ export function pendingFor(token, now = Date.now()) {
       tool: p.tool,
       input: p.input,
       advice: p.advice,
+      collision: p.collision,
       expiresInMs: Math.max(0, p.expiresAt - now),
     });
   }
@@ -31,7 +32,7 @@ export function pendingFor(token, now = Date.now()) {
 }
 
 // Retiene la petición HTTP del hook. `res` es el response de Express, sin contestar todavía.
-export function hold({ token, who, payload, res, onAdvice }) {
+export function hold({ token, who, payload, res, onAdvice, collision = null }) {
   // ID impredecible: aprobar un permiso ejecuta un comando en la máquina de alguien.
   // Un contador secuencial dejaría que un extraño adivine el siguiente y lo apruebe.
   const id = 'perm_' + randomBytes(12).toString('base64url');
@@ -45,6 +46,8 @@ export function hold({ token, who, payload, res, onAdvice }) {
     tool: payload.tool_name || 'desconocida',
     input: input.command || input.file_path || JSON.stringify(input).slice(0, 300),
     advice: null,
+    // Otra sesión tocando este mismo archivo ahora mismo, si la hay.
+    collision,
     createdAt: Date.now(),
     expiresAt: Date.now() + HOLD_MS,
     res,

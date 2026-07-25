@@ -224,6 +224,11 @@ function buildPermit() {
   const advice = el('div', 'permit-advice');
   advice.hidden = true;
 
+  // Colisión: otro agente está tocando este mismo archivo AHORA. Va encima del
+  // consejo de la IA porque es un hecho, no una opinión.
+  const clash = el('div', 'permit-clash');
+  clash.hidden = true;
+
   const actions = el('div', 'permit-actions');
   const allow = el('button', 'btn allow', 'Permitir');
   const deny = el('button', 'btn deny', 'Denegar');
@@ -238,7 +243,7 @@ function buildPermit() {
   const fill = el('i');
   bar.appendChild(fill);
 
-  root.append(top, tool, input, advice, actions, err, bar);
+  root.append(top, tool, input, clash, advice, actions, err, bar);
 
   let id = null;
 
@@ -279,6 +284,19 @@ function buildPermit() {
     who.textContent = `${p.who || 'alguien'} · ${basename(p.repo)}`;
     tool.textContent = p.tool || 'herramienta desconocida';
     input.textContent = p.input == null || p.input === '' ? '(sin argumentos)' : String(p.input);
+
+    const c = p.collision;
+    if (c && c.who) {
+      const mins = Math.max(1, Math.round((Number(c.agoMs) || 0) / 60000));
+      clash.hidden = false;
+      clash.replaceChildren(
+        el('b', null, '⚠ COLISIÓN'),
+        document.createTextNode(` — ${c.who} lleva ${mins} min tocando este mismo archivo`),
+      );
+    } else {
+      clash.hidden = true;
+      clash.replaceChildren();
+    }
 
     const a = p.advice;
     if (a && (a.verdict === 'deny' || a.verdict === 'allow')) {

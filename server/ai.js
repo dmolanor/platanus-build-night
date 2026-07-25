@@ -63,7 +63,15 @@ export function fallbackBrief(snap) {
 // Recomendación sobre un permiso retenido, sin IA: heurística de patrones destructivos.
 const DANGEROUS = /rm\s+-rf|drop\s+(table|database)|force[- ]?push|--force|git\s+reset\s+--hard|truncate|delete\s+from|migrations?\b.*\b(borr|delet|drop)|\b(borr|delet|drop)\b.*\bmigrations?\b/i;
 
-export function fallbackAdvice(permit) {
+export function fallbackAdvice(permit, collision = null) {
+  // La colisión es determinista: no necesita modelo y por eso sobrevive sin red.
+  if (collision) {
+    return {
+      verdict: 'deny',
+      why: `${collision.who} está tocando ese archivo hace ${Math.round(collision.agoMs / 60000)} min`,
+      source: 'fallback',
+    };
+  }
   const text = `${permit.tool} ${permit.input}`;
   if (DANGEROUS.test(text)) {
     return { verdict: 'deny', why: 'toca algo destructivo e irreversible', source: 'fallback' };
@@ -85,10 +93,14 @@ const ADVICE_SCHEMA = {
 };
 
 // Decide por el humano ausente sobre un permiso que tiene a un agente congelado.
-export async function aiAdvice(permit, session) {
-  if (!client) return fallbackAdvice(permit);
+export async function aiAdvice(permit, session, collision = null) {
+  if (!client) return fallbackAdvice(permit, collision);
   try {
     const contexto = session?.lastMessage ? `\nÚltimo mensaje del agente: ${session.lastMessage}` : '';
+    const choque = collision
+      ? `\nCOLISIÓN: ${collision.who} lleva ${Math.round(collision.agoMs / 60000)} min tocando ` +
+        `este mismo archivo (${collision.surface}) desde otra sesión. Si ambos escriben, chocan en el merge.`
+      : '';
     const response = await client.messages.create(
       {
         model: MODEL,
@@ -100,11 +112,13 @@ export async function aiAdvice(permit, session) {
           'Criterio: "deny" solo si es destructivo, irreversible o toca producción sin respaldo. ' +
           '"allow" para lo rutinario (leer, listar, correr tests, instalar deps, editar código). ' +
           '"unsure" si de verdad depende de contexto que no tienes.\n' +
+          'Si te reporto una COLISIÓN, pesa mucho: otro agente está tocando ese mismo archivo ' +
+          'ahora y escribir encima produce un conflicto de merge. Ahí inclínate a "deny".\n' +
           'El campo "why" va en español, máximo 12 palabras, y dice la RAZÓN, no repite el comando.',
         messages: [
           {
             role: 'user',
-            content: `Repo: ${permit.repo}\nHerramienta: ${permit.tool}\nEntrada: ${permit.input}${contexto}`,
+            content: `Repo: ${permit.repo}\nHerramienta: ${permit.tool}\nEntrada: ${permit.input}${contexto}${choque}`,
           },
         ],
       },

@@ -3,7 +3,10 @@ import express from 'express';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { ingest, snapshot, newToken, getToken, startDemo, stopDemo, resetDebt, levelFor, NUDGE_MS } from './state.js';
+import {
+  ingest, snapshot, newToken, getToken, startDemo, stopDemo, resetDebt, levelFor,
+  NUDGE_MS, surfaceFromPayload, collisionFor, repoFromCwd,
+} from './state.js';
 import * as permits from './permits.js';
 import { aiBrief, aiAdvice } from './ai.js';
 
@@ -54,7 +57,14 @@ app.post('/hook', (req, res) => {
   // La recomendación llega después y se adjunta al permiso cuando esté lista.
   // Los botones aparecen en el widget de inmediato, con o sin ella.
   const session = snap.sessions.find((s) => s.sessionId === payload.session_id);
-  permits.hold({ token, who, payload, res, onAdvice: (p) => aiAdvice(p, session) });
+
+  // Detección de colisión en el instante en que todavía es gratis: aún no se ha
+  // escrito una línea. Ya tenemos la intención (el hook la trae) y ya sabemos qué
+  // está tocando cada otra sesión. Sale del dato que ya está en memoria.
+  const surface = surfaceFromPayload(payload, repoFromCwd(payload.cwd));
+  const collision = collisionFor(token, payload.session_id, surface);
+
+  permits.hold({ token, who, payload, res, collision, onAdvice: (p) => aiAdvice(p, session, collision) });
 });
 
 // ── Stream al widget ─────────────────────────────────────────────────────────
