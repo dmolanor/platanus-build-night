@@ -12,25 +12,38 @@ const SOLO_LECTURA = new Set(['Read', 'Glob', 'Grep', 'NotebookRead']);
 
 // Comandos de shell inofensivos. Se compara el comando COMPLETO contra estos
 // prefijos; cualquier cosa fuera de la lista espera al humano.
+//
+// EXCLUIDOS a propósito, aunque "suenen" de solo lectura, porque ejecutan otros
+// programas sin necesitar ningún operador de shell:
+//   env   → `env rm -rf /` corre cualquier cosa
+//   find  → `find . -delete` borra; `-exec` ejecuta
+//   rg    → `--pre` y `--hostname-bin` corren un binario externo
+//   jq    → innecesario aquí, y no vale la pena auditar sus flags
 const BASH_SEGURO = [
   'ls', 'pwd', 'cat', 'head', 'tail', 'wc', 'file', 'stat', 'du', 'df', 'echo',
-  'which', 'whoami', 'date', 'env',
+  'which', 'whoami', 'date',
   'git status', 'git log', 'git diff', 'git branch', 'git show', 'git remote',
   'git rev-parse', 'git blame', 'git stash list',
   'npm test', 'npm run test', 'npm ls', 'npm outdated',
   'pnpm test', 'yarn test',
   'node --check', 'node -v', 'npm -v', 'python --version',
-  'grep', 'rg', 'find', 'tree', 'jq',
+  'grep', 'tree',
 ];
 
 // Cualquiera de estos convierte un comando "seguro" en un vehículo para otro:
 // `ls && rm -rf /`. Si aparece uno solo, no se aprueba.
-const ENCADENA = /[;&|><`$(){}]|\bsudo\b|\bnpx\b|\bcurl\b|\bwget\b|--force|\bxargs\b|\beval\b|\bexec\b/;
+const ENCADENA = /[;&|><`$(){}]|\bsudo\b|\bnpx\b|\bcurl\b|\bwget\b|\bxargs\b|\beval\b|\bexec\b/;
+
+// Defensa en profundidad: banderas que ejecutan o destruyen aunque el binario
+// esté en la lista. Si el binario permitido crece, esto sigue protegiendo.
+const BANDERA_PELIGROSA =
+  /(^|\s)-(-)?(exec|execdir|delete|force|pre|pre-glob|ext-diff|eval|upload-pack|receive-pack|hostname-bin|fprint\w*|fls|ok|okdir)\b|--(pre|ext-diff)=/i;
 
 function bashEsSeguro(cmd) {
   const c = String(cmd || '').trim();
   if (!c || c.length > 200) return false;
   if (ENCADENA.test(c)) return false;
+  if (BANDERA_PELIGROSA.test(c)) return false;
   return BASH_SEGURO.some((p) => c === p || c.startsWith(p + ' '));
 }
 
