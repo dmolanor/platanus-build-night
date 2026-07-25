@@ -21,7 +21,16 @@ const SVG_NS = 'http://www.w3.org/2000/svg';
 // El cuerpo es un trazo grueso con puntas redondas, no un contorno relleno. A 38 px
 // —el tamaño mínimo del widget— un contorno con curvas finas se convierte en una
 // mancha; un trazo de 28 sobrevive la escala y sigue leyéndose como plátano.
-const CUERPO = 'M37 20 C65 41, 67 78, 45 99';
+// Tres tramos del mismo lomo, de fino a grueso a fino. Un solo trazo con
+// linecap redondo daba dos semiesferas idénticas en las puntas — o sea, un
+// pepino. El plátano se afina en los extremos, y eso un stroke uniforme no lo
+// puede hacer. Se mantiene el trazo (y no un contorno relleno) porque a 38 px
+// —el mínimo del widget— un contorno fino se convierte en mancha.
+const LOMO = [
+  { d: 'M37 20 C46 27, 52 33, 56 41', clase: 'ch-body ch-body-fin' },
+  { d: 'M53 36 C64 52, 65 70, 56 85', clase: 'ch-body ch-body-medio' },
+  { d: 'M58 81 C55 89, 50 95, 45 99', clase: 'ch-body ch-body-fin2' },
+];
 
 // La boca es lo único que cambia de forma a mano. El resto es CSS.
 const BOCAS = {
@@ -74,7 +83,7 @@ export function mount(host) {
 
   // ── El plátano ───────────────────────────────────────────────────────────
   const banana = node('g', { class: 'ch-banana' });
-  banana.appendChild(node('path', { class: 'ch-body', d: CUERPO }));
+  for (const t of LOMO) banana.appendChild(node('path', { class: t.clase, d: t.d }));
   // Cabito y punta: los dos extremos se oscurecen antes que el resto, igual que
   // en un plátano de verdad.
   banana.appendChild(node('path', { class: 'ch-stem', d: 'M37 21 L34 12' }));

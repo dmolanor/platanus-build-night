@@ -39,6 +39,12 @@
   <div id="bubble" class="bubble" hidden></div>
   <ul id="sessions" class="sessions"></ul>
   <p id="empty" class="empty" hidden>Nadie te está esperando. Estás al día.</p>
+  <!-- "Estás al día" es un callejón sin salida: te felicita y te deja sin nada que
+       hacer. Cuando no hay deuda, lo útil es lo que NADIE empezó. -->
+  <section id="libre" class="libre" hidden>
+    <div class="libre-head">Y nadie está en esto</div>
+    <ul id="libre-list" class="libre-list"></ul>
+  </section>
   <!-- Lo que Pings aprobó solo mientras no estabas. Sin este registro, decidir
        por alguien sería abuso: aquí se rinde cuentas. -->
   <section id="auto" class="auto" hidden>
@@ -98,6 +104,8 @@ const S = {
   sessions: [],
   permits: [],
   auto: [],
+  libres: [],
+  libresAt: 0,
   view: 'normal',
   tollGraceUntil: 0,
   paying: false,
@@ -528,6 +536,48 @@ function renderAuto() {
   syncList($('auto-list'), items, (a) => a.at + ':' + a.sessionId, buildAutoItem);
 }
 
+function buildLibre() {
+  const root = el('li', 'libre-item');
+  const num = el('span', 'libre-num');
+  const main = el('div');
+  const tit = el('div', 'libre-tit');
+  const meta = el('div', 'libre-meta');
+  main.append(tit, meta);
+  root.append(num, main);
+
+  function update(i) {
+    num.textContent = '#' + i.numero;
+    tit.textContent = i.titulo || '(sin título)';
+    meta.textContent = [i.repo, i.esPR ? 'PR' : null, i.asignado ? 'asignado a ' + i.asignado : null]
+      .filter(Boolean).join(' · ');
+  }
+  return { el: root, update };
+}
+
+// Solo se consulta cuando NO hay deuda: es la respuesta a "estás al día, ¿y ahora
+// qué?". Con agentes esperándote, lo urgente es la lista, no lo que falta empezar.
+async function cargarLibres() {
+  const ahora = Date.now();
+  if (ahora - S.libresAt < 60_000) return;
+  S.libresAt = ahora;
+  try {
+    const r = await fetch(`/api/issues?token=${QT}`);
+    if (!r.ok) return;
+    const d = await r.json();
+    S.libres = d.conectado && Array.isArray(d.sinNadie) ? d.sinNadie.slice(0, 5) : [];
+    renderLibres();
+  } catch (_) {}
+}
+
+function renderLibres() {
+  const box = $('libre');
+  const ocioso = S.agentesParados === 0 && !activePermits().length;
+  const hay = ocioso && S.libres.length > 0;
+  box.hidden = !hay;
+  if (!hay) { clearList($('libre-list')); return; }
+  syncList($('libre-list'), S.libres, (i) => i.repo + '#' + i.numero, buildLibre);
+}
+
 function renderSessions() {
   // El ranking numera solo lo que TE ESTÁ COSTANDO. Las sesiones trabajando van
   // debajo, sin número: son contexto, no deuda.
@@ -732,6 +782,8 @@ function render(snap) {
   renderDebt();
   renderSessions();
   renderAuto();
+  if (S.agentesParados === 0) cargarLibres();
+  renderLibres();
   renderPermits();
 
   // Entrada y salida de la vista de deuda alta.

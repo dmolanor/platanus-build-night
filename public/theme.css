@@ -111,11 +111,15 @@ body[data-level="toll"]  { --ball: #7a5128; --ball-dark: #3c2410; }
 .ch-body {
   fill: none;
   stroke: var(--ball);
-  stroke-width: 28;
   stroke-linecap: round;
   stroke-linejoin: round;
   transition: stroke 600ms ease;
 }
+/* De fino a grueso a fino. Un trazo uniforme con linecap redondo daba dos
+   semiesferas idénticas en las puntas — geométricamente, un pepino. */
+.ch-body-fin   { stroke-width: 17; }
+.ch-body-medio { stroke-width: 27; }
+.ch-body-fin2  { stroke-width: 14; }
 
 .ch-stem, .ch-tip {
   fill: none;
