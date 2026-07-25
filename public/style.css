@@ -124,7 +124,7 @@ body[data-offline="1"] .conn {
   display: flex;
   align-items: center;
   gap: clamp(8px, 3vw, 20px);
-  padding: 24px clamp(10px, 3vw, 22px) 6px;
+  padding: 28px clamp(10px, 3vw, 22px) 6px;
   flex: 0 0 auto;
 }
 
