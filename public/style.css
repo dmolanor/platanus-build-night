@@ -30,11 +30,7 @@ html, body {
 }
 
 body {
-  /* --bd = el fondo VIGENTE. Existe porque el pie del brief es sticky y necesita
-     tapar el texto que pasa por debajo; `background: var(--bg)` ahí se vería como
-     un parche gris sobre el rojo del nivel toll. */
-  --bd: var(--bg);
-  background: var(--bd);
+  background: var(--bg);
   color: var(--text);
   font: 13px/1.35 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
@@ -47,14 +43,13 @@ body[data-level="calm"]  { --ball: #2fbf71; --ball-dark: #135c37; --hot: #9a9baa
 body[data-level="nudge"] { --ball: #ffd23f; --ball-dark: #8a6a00; --hot: #ffd23f; }
 body[data-level="angry"] { --ball: #ff4d4d; --ball-dark: #7a1414; --hot: #ff5a5a; }
 body[data-level="toll"]  { --ball: #c1121f; --ball-dark: #4a0810; --hot: #ff6b6b; }
-body[data-level="toll"]  { --bd: #1c0407; }
+body[data-level="toll"]  { background: #1c0407; }
 
 /* ── Vistas ───────────────────────────────────────────────────────────────── */
 .view { display: none; }
-body[data-view="normal"] #view-normal,
-body[data-view="brief"]  #view-brief { display: flex; }
+body[data-view="normal"] #view-normal { display: flex; }
 
-#view-normal, #view-brief {
+#view-normal {
   position: absolute;
   inset: 0;
   flex-direction: column;
@@ -511,6 +506,40 @@ body[data-offline="1"] .conn {
 }
 .permit-more[hidden] { display: none; }
 
+/* El titular del brief: por dónde empezar, en una frase. Va arriba de la lista y
+   dentro del scroll — es lo primero que se lee, pero no vale gastarle sitio fijo al
+   hero, que ya dice cuánto te cuesta. */
+.lead {
+  margin: 8px clamp(10px, 3vw, 22px) 2px;
+  font-size: clamp(11.5px, 3.1vw, 14px);
+  font-weight: 600;
+  line-height: 1.28;
+  color: var(--text);
+  text-wrap: balance;
+  border-left: 2px solid var(--accent);
+  padding-left: 8px;
+}
+.lead[hidden] { display: none; }
+
+/* Cómo tratar esta conversación. Los colores son los tres semánticos de siempre:
+   verde se cierra fácil, rojo hay algo detenido, ámbar decide tú. Sin cuarto color. */
+.sess-tag {
+  display: inline-block;
+  margin-top: 3px;
+  border-radius: 5px;
+  padding: 1px 6px;
+  font-size: clamp(9px, 2.4vw, 11px);
+  font-weight: 700;
+  letter-spacing: .02em;
+  background: #22232c; color: #b6b7c4; border: 1px solid #34353f;
+}
+.sess-tag[hidden] { display: none; }
+.sess-tag[data-tag="casi_lista"]      { background:#0f2e1c; color:#7fe3a6; border-color:#1f5c37; }
+.sess-tag[data-tag="bloqueada"]       { background:#2c0d0f; color:#ffb3b3; border-color:#6b2126; }
+.sess-tag[data-tag="en_loop"]         { background:#3a2a06; color:#ffcf5a; border-color:#5c4409; }
+.sess-tag[data-tag="cara_de_retomar"] { background:#241a33; color:#c9aaff; border-color:#3f2d5c; }
+.sess-tag[data-tag="ya_no_importa"]   { background:#1a1b22; color:#7a7b88; border-color:#2c2d36; }
+
 /* A qué issue pertenece esta conversación. Va debajo del repo porque responde a la
    misma pregunta —"¿qué es esto?"— y antes del motivo, que responde "¿y qué hago?".
    El emparejamiento por número es un hecho; el semántico es una apuesta de la IA, y
@@ -528,102 +557,6 @@ body[data-offline="1"] .conn {
 .sess-issue:hover { color: var(--text); text-decoration: underline; }
 .sess-issue[hidden] { display: none; }
 .sess-issue[data-como="semejanza"]::after { content: " ?"; color: var(--dim-2); }
-
-/* ── Brief ────────────────────────────────────────────────────────────────── */
-/* El que hace scroll es la LISTA, no la vista. Con la vista entera scrolleando,
-   la barra nativa se le montaba encima a los botones de #top (absolute, right:6px)
-   y el pie se iba bajo el fold. Acotando el scroll a la lista, el titular y el pie
-   quedan fijos y la barra vive en su propia franja. */
-#view-brief {
-  padding: 10px clamp(10px, 3vw, 24px) 10px;
-  overflow: hidden;
-}
-.brief-tag, .brief-head, .brief-foot { flex: 0 0 auto; }
-.brief-tag {
-  color: var(--accent);
-  font-size: clamp(9px, 2.5vw, 12px);
-  font-weight: 800;
-  letter-spacing: .22em;
-  text-transform: uppercase;
-}
-.brief-head {
-  font-size: clamp(15px, 4.4vw, 26px);
-  font-weight: 800;
-  line-height: 1.15;
-  letter-spacing: -0.02em;
-  margin: 4px 0 8px;
-  overflow-wrap: anywhere;
-}
-/* min-height: 0 es obligatorio: sin él un hijo flex no se encoge por debajo de su
-   contenido y `overflow-y: auto` nunca llega a activarse. */
-.brief-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  flex: 1 1 auto;
-  min-width: 0;
-  min-height: 0;
-  overflow-y: auto;
-  scrollbar-gutter: stable;
-}
-.brief-item {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  column-gap: 8px;
-  border-top: 1px solid var(--line);
-  padding: 7px 0;
-  min-width: 0;
-}
-.brief-rank {
-  grid-row: 1 / span 5;
-  font-size: clamp(15px, 4vw, 22px);
-  font-weight: 900;
-  color: var(--accent);
-  font-variant-numeric: tabular-nums;
-  line-height: 1;
-  padding-top: 1px;
-}
-.brief-headline {
-  font-weight: 700;
-  font-size: clamp(12px, 3.2vw, 15px);
-  line-height: 1.2;
-  overflow-wrap: anywhere;
-}
-/* La etiqueta dice CÓMO tratarla: es lo que el ranking mecánico no puede producir. */
-.brief-tagchip {
-  justify-self: start;
-  margin-top: 3px;
-  border-radius: 5px;
-  padding: 1px 7px;
-  font-size: clamp(9px, 2.4vw, 11px);
-  font-weight: 700;
-  letter-spacing: .03em;
-  background: #22232c; color: #b6b7c4; border: 1px solid #34353f;
-}
-.brief-tagchip[hidden] { display: none; }
-.brief-tagchip[data-tag="casi_lista"]      { background:#0f2e1c; color:#7fe3a6; border-color:#1f5c37; }
-.brief-tagchip[data-tag="bloqueada"]       { background:#2c0d0f; color:#ffb3b3; border-color:#6b2126; }
-.brief-tagchip[data-tag="en_loop"]         { background:#3a2a06; color:#ffcf5a; border-color:#5c4409; }
-.brief-tagchip[data-tag="cara_de_retomar"] { background:#241a33; color:#c9aaff; border-color:#3f2d5c; }
-.brief-tagchip[data-tag="ya_no_importa"]   { background:#1a1b22; color:#7a7b88; border-color:#2c2d36; }
-
-.brief-who { color: var(--dim); font-size: clamp(9.5px, 2.6vw, 12px); margin-top: 3px; overflow-wrap: anywhere; }
-.brief-who b { color: #9a9baa; font-weight: 600; }
-.brief-why { color: #b6b7c4; font-size: clamp(10px, 2.8vw, 13px); margin-top: 3px; overflow-wrap: anywhere; }
-.brief-action { color: var(--accent); font-weight: 600; font-size: clamp(10px, 2.8vw, 13px); margin-top: 2px; overflow-wrap: anywhere; }
-.brief-action[hidden] { display: none; }
-/* Siempre visible. Cerrar el brief es el gesto de "ya volví" — es lo que resetea la
-   deuda — así que no puede quedar bajo el scroll. */
-.brief-foot {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  margin-top: 8px;
-  padding-top: 8px;
-  background: var(--bd);
-  border-top: 1px solid var(--line);
-}
-.brief-src { color: #4d4e5a; font-size: 10px; letter-spacing: .05em; text-transform: uppercase; }
 
 /* ── El personaje (SVG + CSS puro) ────────────────────────────────────────── */
 .pings-char {

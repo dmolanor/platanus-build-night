@@ -37,6 +37,10 @@
        nativa se le montaba encima a los botones de #top, y el titular —que es la
        promesa del producto— se iba con el scroll. El titular no se va. -->
   <div id="scroll">
+  <!-- El brief de vuelta vive AQUÍ, no en otra pantalla. Es la información más
+       relevante del widget: por dónde empezar y por qué. Mandarte a otra vista
+       para leerlo era pedirte un viaje para ver lo único que importa. -->
+  <p id="lead" class="lead" hidden></p>
   <section id="permits-normal" class="permits"></section>
   <!-- Pinta EXACTAMENTE el mismo string que dice la voz. Un solo texto, dos canales:
        así no hay nada que mantener sincronizado, y si el audio falla en el venue
@@ -59,17 +63,6 @@
   </div>
 </main>
 
-<!-- Brief: a dónde volver -->
-<section id="view-brief" class="view">
-  <div class="brief-tag">Brief de vuelta</div>
-  <div id="brief-head" class="brief-head">Cargando…</div>
-  <ul id="brief-list" class="brief-list"></ul>
-  <div class="brief-foot">
-    <button id="brief-close" class="btn ghost" type="button">Volver al widget</button>
-    <span id="brief-src" class="brief-src"></span>
-  </div>
-</section>
-
 <script type="module">
 // TODA la lógica vive aquí dentro. Los navegadores estrangulan los timers de la
 // pestaña madre cuando está en segundo plano, que es justo el escenario que importa.
@@ -81,7 +74,6 @@ const QT = encodeURIComponent(TOKEN);
 // cómo se ve, no un widget que te acompaña: no habla nunca. Y no puede leer el mute
 // de localStorage porque lo COMPARTE con el widget de verdad (mismo origen).
 const ES_MUESTRA = new URLSearchParams(location.search).has('preview');
-const TOLL_GRACE_MS = 30_000;    // tras verlo, no vuelvas a caer en deuda alta enseguida
 
 const $ = (id) => document.getElementById(id);
 
@@ -98,9 +90,10 @@ const S = {
   libres: [],
   libresAt: 0,
   pares: new Map(),   // sessionId -> issue/PR emparejado
-  view: 'normal',
-  tollGraceUntil: 0,
-  paying: false,
+  brief: new Map(),   // sessionId -> lo que la IA dice de esa conversación
+  briefOrden: [],     // sessionIds en el orden de la IA (por consecuencia, no por costo)
+  briefHead: '',
+  briefAt: 0,
   offline: true,
   muted: ES_MUESTRA || localStorage.getItem('pings_mute') === '1',
   spoken: new Set(),
@@ -483,7 +476,11 @@ function buildSession() {
   issue.target = '_blank';
   issue.rel = 'noopener noreferrer';
   issue.hidden = true;
-  main.append(head, where, issue, prog, why, action, msg);
+  // Cómo tratarla, según la IA. Es lo que el ranking mecánico no puede producir:
+  // "casi lista" y "en loop" pueden costar lo mismo y pedir lo contrario.
+  const tag = el('span', 'sess-tag');
+  tag.hidden = true;
+  main.append(head, tag, where, issue, prog, why, action, msg);
 
   const cost = el('div', 'sess-cost');
   const costN = el('b');
@@ -535,9 +532,24 @@ function buildSession() {
       issue.dataset.como = par.como || '';
     }
 
-    why.textContent = s.why || motivo(s);
+    // Lo que dijo la IA de ESTA conversación. Su `why` y su `action` ganan a los
+    // mecánicos: leyó la sesión, la aritmética solo contó minutos.
+    const b = S.brief.get(s.sessionId);
+    const ETIQUETAS = {
+      casi_lista: 'casi lista', bloqueada: 'bloqueada', en_loop: 'en loop',
+      cara_de_retomar: 'cara de retomar', ya_no_importa: 'ya no importa',
+    };
+    tag.hidden = !(b && ETIQUETAS[b.tag]);
+    if (!tag.hidden) {
+      tag.textContent = ETIQUETAS[b.tag];
+      tag.dataset.tag = b.tag;
+    }
 
-    const act = Number(s.loopCount) >= 1 ? 'Se está dando vueltas: ciérrala' : s.action;
+    why.textContent = (b && b.why) || s.why || motivo(s);
+
+    const act = Number(s.loopCount) >= 1
+      ? 'Se está dando vueltas: ciérrala'
+      : ((b && b.action) || s.action);
     action.textContent = act ? '→ ' + act : '';
     action.hidden = !act;
 
@@ -592,6 +604,27 @@ function buildLibre() {
   return { el: root, update };
 }
 
+// El brief de vuelta, servido DENTRO del widget. La IA no produce otra pantalla:
+// reordena la lista que ya estás viendo y le pone a cada fila su etiqueta y su
+// "qué hacer". Solo se pide si hay deuda — sin nadie esperándote no hay nada que
+// priorizar. El servidor cachea 60 s, así que 30 s acá no gasta de más.
+async function cargarBrief() {
+  const ahora = Date.now();
+  if (S.agentesParados === 0) { S.brief.clear(); S.briefOrden = []; S.briefHead = ''; return; }
+  if (ahora - S.briefAt < 30_000) return;
+  S.briefAt = ahora;
+  try {
+    const r = await fetch(`/api/brief?token=${QT}`);
+    if (!r.ok) return;
+    const b = await r.json();
+    const items = Array.isArray(b.items) ? b.items : [];
+    S.brief = new Map(items.filter((i) => i.sessionId).map((i) => [i.sessionId, i]));
+    S.briefOrden = items.map((i) => i.sessionId);
+    S.briefHead = typeof b.headline === 'string' ? b.headline : '';
+    renderSessions();
+  } catch (_) {}
+}
+
 // Una sola consulta sirve para dos cosas: los `pares` (a qué issue pertenece cada
 // conversación, que se pinta en su fila) y los `sinNadie` (lo que nadie empezó, que
 // solo se muestra cuando estás al día).
@@ -633,14 +666,35 @@ function renderLibres() {
 }
 
 function renderSessions() {
+  // Manda el orden de la IA cuando lo hay. Es la diferencia entera del producto:
+  // el orden mecánico dice qué es CARO, el de la IA dice qué CONVIENE. Una sesión
+  // en loop es la más cara y aun así va al final, porque no es una a la que volver
+  // sino una que se cierra. Lo que la IA no clasificó conserva el orden del servidor.
+  let lista = S.sessions;
+  if (S.briefOrden.length) {
+    const pos = new Map(S.briefOrden.map((id, i) => [id, i]));
+    lista = S.sessions.slice().sort((a, b) => {
+      const pa = pos.has(a.sessionId) ? pos.get(a.sessionId) : 999;
+      const pb = pos.has(b.sessionId) ? pos.get(b.sessionId) : 999;
+      return pa - pb;
+    });
+  }
+
   // El ranking numera solo lo que TE ESTÁ COSTANDO. Las sesiones trabajando van
   // debajo, sin número: son contexto, no deuda.
   let n = 0;
-  const conRank = S.sessions.map((s) => {
+  const conRank = lista.map((s) => {
     const cuenta = s.status === 'waiting' || s.status === 'done';
     return { ...s, rank: cuenta ? ++n : 0 };
   });
   syncList($('sessions'), conRank, (s) => s.sessionId, buildSession);
+
+  // El titular del brief: por dónde empezar, en una frase.
+  const lead = $('lead');
+  const hay = Boolean(S.briefHead) && S.agentesParados > 0;
+  if (hay && lead.textContent !== S.briefHead) lead.textContent = S.briefHead;
+  lead.hidden = !hay;
+
   pintarVacio();
 }
 
@@ -716,111 +770,6 @@ function applyPermitFlag() {
   document.body.dataset.permits = activePermits().length > 0 ? '1' : '0';
 }
 
-function setView(view) {
-  if (S.view === view) return;
-  S.view = view;
-  document.body.dataset.view = view;
-  renderPermits();
-}
-
-// ── VISTA C · pings ─────────────────────────────────────────────────────────
-// En deuda alta el brief aparece SOLO. La pantalla intermedia era el último resto
-// del bloqueo que quitamos: sin bloquear, era un cartel rojo con un botón para
-// pedir lo único que el producto promete hacer por sí mismo.
-function enterToll() {
-  announce(Math.round(S.totalWaitedMs / 60000) + ' agent-minutos parados. Te digo a cuál volver.');
-  mostrarBrief();
-}
-
-async function mostrarBrief() {
-  if (S.paying) return;
-  S.paying = true;
-  S.tollGraceUntil = Date.now() + TOLL_GRACE_MS;
-  setView('brief');
-  $('brief-head').textContent = 'Reconstruyendo qué estaba pasando…';
-  clearList($('brief-list'));
-  $('brief-src').textContent = '';
-
-  // El brief se pide ANTES de resetear: /api/toll/complete pone since=now en todas
-  // las sesiones, así que después del reset el ranking sale con "1 min" en todo y
-  // pierde justo lo que lo hace útil. Ambas llamadas se hacen igual, en este orden.
-  let brief = null;
-  try {
-    const r = await fetch(`/api/brief?token=${QT}`);
-    brief = await r.json();
-  } catch (_) {}
-
-  // Ojo: acá NO se resetea la deuda. Resetear significa "ya volví", y eso lo
-  // decides tú al cerrar el brief — no puede pasar por el solo hecho de mirarlo.
-  renderBrief(brief);
-  S.paying = false;
-  S.tollGraceUntil = Date.now() + TOLL_GRACE_MS;
-}
-
-
-// ── Brief ───────────────────────────────────────────────────────────────────
-function buildBriefItem() {
-  const root = el('li', 'brief-item');
-  const rank = el('span', 'brief-rank');
-  const head = el('div', 'brief-headline');
-  const tag = el('span', 'brief-tagchip');
-  const who = el('div', 'brief-who');
-  const whoRepo = el('b');
-  const whoRest = el('span');
-  who.append(whoRepo, whoRest);
-  const why = el('div', 'brief-why');
-  const action = el('div', 'brief-action');
-  root.append(rank, head, tag, who, why, action);
-
-  // La etiqueta es lo que el ranking mecánico no puede decir: no que está
-  // esperando, sino CÓMO tratarla.
-  const TAGS = {
-    casi_lista: 'casi lista',
-    bloqueada: 'bloqueada',
-    en_loop: 'en loop',
-    cara_de_retomar: 'cara de retomar',
-    ya_no_importa: 'ya no importa',
-  };
-
-  function update(item) {
-    rank.textContent = String(item._i);
-    head.textContent = item.label || basename(item.repo);
-    const t = TAGS[item.tag];
-    tag.textContent = t || '';
-    tag.hidden = !t;
-    tag.dataset.tag = item.tag || '';
-    whoRepo.textContent = basename(item.repo);
-    whoRest.textContent = ` · ${item.who || 'alguien'} · ${item.minutes != null ? item.minutes + ' agent-min' : '—'}`;
-    why.textContent = item.why ? String(item.why) : 'esperando';
-    action.textContent = item.action ? '→ ' + String(item.action) : '';
-    action.hidden = !item.action;
-  }
-
-  return { el: root, update };
-}
-
-function renderBrief(brief) {
-  const b = brief && typeof brief === 'object' ? brief : {};
-  const items = Array.isArray(b.items) ? b.items : [];
-  $('brief-head').textContent = b.headline
-    ? String(b.headline)
-    : items.length
-      ? 'Esto es lo que te espera.'
-      : 'No pude cargar el brief, pero la deuda quedó saldada.';
-  $('brief-src').textContent = b.source ? 'fuente: ' + String(b.source) : '';
-  const withIndex = items.map((it, i) => Object.assign({ _i: i + 1 }, it));
-  syncList($('brief-list'), withIndex, (it) => it.sessionId || 'i' + it._i, buildBriefItem);
-  say(b.headline ? String(b.headline) : '');
-}
-
-// Cerrar el brief es el gesto de "ya volví": ahí sí se salda la deuda.
-$('brief-close').addEventListener('click', async () => {
-  S.tollGraceUntil = Math.max(S.tollGraceUntil, Date.now() + TOLL_GRACE_MS);
-  try { await fetch(`/api/toll/complete?token=${QT}`, { method: 'POST' }); } catch (_) {}
-  setView('normal');
-  applyPermitFlag();
-});
-
 // ── Render principal ────────────────────────────────────────────────────────
 function render(snap) {
   S.totalWaitedMs = Number(snap.totalWaitedMs) || 0;
@@ -852,17 +801,10 @@ function render(snap) {
   // Se consulta SIEMPRE (con su propio enfriamiento de 60 s), no solo cuando estás
   // al día: el emparejamiento se pinta en cada fila, y una fila que te está
   // esperando es justo donde más importa saber a qué trabajo pertenece.
+  cargarBrief();
   cargarLibres();
   renderLibres();
   renderPermits();
-
-  // Con la deuda alta el brief aparece solo, sin pantalla intermedia.
-  // Estando fuera no se avisa: no hay nadie a quien avisarle. La deuda queda
-  // congelada y el brief salta en cuanto vuelves, que es cuando sirve.
-  if (S.level === 'toll' && S.view === 'normal' && !S.paying && now >= S.tollGraceUntil
-      && S.presence !== 'away') {
-    enterToll();
-  }
 
   if (typeof snap.speak === 'string') announce(snap.speak);
 }

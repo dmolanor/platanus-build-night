@@ -136,10 +136,16 @@ function getSession(t, sessionId, payload, who) {
 // esperarte, así que su reloj no puede empezar de cero.
 function setStatus(s, status, reason) {
   if (s.status === status && s.reason === reason) return;
-  const seguiaEsperando = DEBT_STATUSES.has(s.status) && DEBT_STATUSES.has(status);
+  const esperaba = DEBT_STATUSES.has(s.status);
+  const espera = DEBT_STATUSES.has(status);
+  // Volver a una conversación SALDA su deuda. Si el agente vuelve a correr es
+  // porque lo destrabaste: esos agent-minutos ya se cobraron y no se siguen
+  // arrastrando. Es la única forma de que el número baje al hacer lo correcto.
+  // El acumulado del día no se toca — ese sí es historia y vive aparte.
+  if (esperaba && !espera) s.debtMs = 0;
   s.status = status;
   s.reason = reason;
-  if (!seguiaEsperando) s.since = Date.now();
+  if (!(esperaba && espera)) s.since = Date.now();
 }
 
 // ── Superficies: qué archivo está tocando cada agente ────────────────────────
