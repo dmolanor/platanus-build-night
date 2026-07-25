@@ -8,6 +8,7 @@
 <link rel="stylesheet" href="./style.css">
 <link rel="stylesheet" href="./theme.css">
 <script src="./settings.js"></script>
+<script src="./gh.js"></script>
 </head>
 <body data-level="calm" data-view="normal" data-permits="0" data-offline="0">
 
@@ -561,10 +562,19 @@ async function cargarLibres() {
   if (ahora - S.libresAt < 60_000) return;
   S.libresAt = ahora;
   try {
-    const r = await fetch(`/api/issues?token=${QT}`);
+    // GitHub lo consulta EL NAVEGADOR con tu PAT. Al servidor solo le mandamos
+    // los títulos para el emparejamiento semántico: la credencial no viaja.
+    if (typeof PINGS_GH === 'undefined' || !PINGS_GH.configurado()) { S.libres = []; return; }
+    const { items } = await PINGS_GH.traer();
+    if (!items.length) { S.libres = []; renderLibres(); return; }
+    const r = await fetch(`/api/emparejar?token=${QT}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ issues: items }),
+    });
     if (!r.ok) return;
     const d = await r.json();
-    S.libres = d.conectado && Array.isArray(d.sinNadie) ? d.sinNadie.slice(0, 5) : [];
+    S.libres = Array.isArray(d.sinNadie) ? d.sinNadie.slice(0, 5) : [];
     renderLibres();
   } catch (_) {}
 }

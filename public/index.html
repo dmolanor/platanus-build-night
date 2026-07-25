@@ -8,6 +8,7 @@
 <link rel="icon" href="data:,">
 <link rel="stylesheet" href="./theme.css">
 <script src="./settings.js"></script>
+<script src="./gh.js"></script>
 <style>
   /* Los tokens viven en theme.css. Acá solo hay layout de la landing.
      Las reglas de composición y la lista de patrones prohibidos están en DESIGN.md:
@@ -409,6 +410,26 @@ ranking      = costo × peso(motivo) × (1 + loops)
 
         <div class="set-row">
           <div>
+            <h3>Tus issues de GitHub</h3>
+            <p>Cuando nadie te está esperando, el widget te muestra qué issues <strong>no tiene
+              nadie encima</strong>. <strong>Tu PAT no sale de esta máquina</strong>: lo guarda el
+              navegador y es él quien le pregunta a GitHub. Nuestro servidor solo recibe los títulos,
+              para emparejarlos con tus conversaciones. Usa uno <em>fine-grained</em>, de solo
+              lectura y con expiración corta.</p>
+          </div>
+          <div class="set-ctl" style="flex-direction:column;align-items:stretch;gap:6px">
+            <input type="text" id="gh-pat" size="24" spellcheck="false" placeholder="github_pat_…">
+            <input type="text" id="gh-repos" size="24" spellcheck="false" placeholder="dueño/repo, dueño/otro">
+            <div class="row" style="gap:6px">
+              <button class="sm" id="gh-guardar" type="button">Guardar</button>
+              <button class="ghost sm" id="gh-olvidar" type="button">Olvidar</button>
+            </div>
+            <span class="hint" id="gh-estado" style="font-size:12px"></span>
+          </div>
+        </div>
+
+        <div class="set-row">
+          <div>
             <h3>Cómo te lo dice</h3>
             <p><strong>Seco</strong> es el default y es lo que se muestra en serio: el número y nada
               más. <strong>Suelto</strong> tiene ironía. <strong>Charro</strong> te reclama en
@@ -456,7 +477,18 @@ ranking      = costo × peso(motivo) × (1 + loops)
         <div class="row">
           <code class="tok" id="tok2">…</code>
           <button class="ghost sm" id="nuevo" type="button">Generar otro</button>
+          <button class="ghost sm" id="yatengo" type="button">Ya tengo uno</button>
         </div>
+        <!-- localStorage es POR ORIGEN, asi que abrir esto desde otro puerto o
+             perfil acunaba un token nuevo EN SILENCIO y te dejaba mirando una cola
+             vacia. Tiene que haber forma de decir "ya tengo uno". -->
+        <div class="row" id="pegar-token" hidden style="margin-top:9px">
+          <input type="text" id="tok-input" size="30" spellcheck="false"
+                 placeholder="pega el token que ya está en tu settings.json">
+          <button class="sm" id="usar-token" type="button">Usar este</button>
+        </div>
+        <p class="hint" id="tok-err" hidden style="color:var(--red)">Ese token no tiene el
+          formato correcto. Debe empezar por <code>p_</code> y traer 24 caracteres después.</p>
         <p class="hint">Compártelo con quien trabaje contigo: el mismo token es la misma cola, y
           cualquiera puede destrabar al agente del otro. Eso también significa que cualquiera con el
           token aprueba comandos en tu máquina. Es intencional para dos socios y no escala a una
@@ -631,6 +663,40 @@ $('#s-rate').oninput = () => {
 $('#s-who').oninput = () => { PINGS.save({ who: $('#s-who').value }); pintarBloque(); };
 
 // ── Botones ────────────────────────────────────────────────────────────────
+// El PAT solo se escribe, nunca se lee de vuelta a la pantalla ni se manda a
+// ningún lado. Vive en localStorage de esta máquina.
+function pintarGH() {
+  const ok = PINGS_GH.configurado();
+  $('#gh-estado').textContent = ok
+    ? 'conectado · ' + PINGS_GH.repos().join(', ')
+    : 'sin conectar';
+  $('#gh-repos').value = PINGS_GH.repos().join(', ');
+}
+$('#gh-guardar').onclick = () => {
+  PINGS_GH.guardar($('#gh-pat').value, $('#gh-repos').value);
+  $('#gh-pat').value = '';
+  pintarGH();
+};
+$('#gh-olvidar').onclick = () => { PINGS_GH.olvidar(); $('#gh-pat').value = ''; pintarGH(); };
+pintarGH();
+
+$('#yatengo').onclick = () => {
+  const caja = $('#pegar-token');
+  caja.hidden = !caja.hidden;
+  if (!caja.hidden) $('#tok-input').focus();
+};
+
+$('#usar-token').onclick = async () => {
+  const v = $('#tok-input').value.trim();
+  // Mismo formato que valida el servidor: si no cuadra, avisar acá y no dejarte
+  // creer que quedó puesto.
+  if (!/^p_[A-Za-z0-9_-]{24}$/.test(v)) { $('#tok-err').hidden = false; return; }
+  $('#tok-err').hidden = true;
+  token = v;
+  await ensureToken();
+  $('#pegar-token').hidden = true;
+};
+
 $('#nuevo').onclick = async () => {
   token = null;
   localStorage.removeItem('pings_token');

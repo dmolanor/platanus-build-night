@@ -449,36 +449,17 @@ app.get('/api/voice', async (req, res) => {
   }
 });
 
-// ── Issues: qué trabajo no tiene a nadie encima ──────────────────────────────
-// El PAT entra por el BODY, nunca por la query: Render y Cloudflare registran la
-// URL entera, y eso fue justo lo que marcó la auditoría. Vive solo en memoria y
-// no sale en ninguna respuesta.
-app.post('/api/github', (req, res) => {
-  const token = tokenOf(req);
-  if (!token) return res.status(404).json({ ok: false });
-  const out = github.configurar(token, {
-    pat: req.body?.pat,
-    repos: req.body?.repos,
-  });
-  res.json({ ok: true, ...out });
-});
-
-app.get('/api/github', (req, res) => {
-  const token = tokenOf(req);
-  if (!token) return res.status(404).json({ ok: false });
-  res.json(github.estado(token));
-});
-
-// Se consulta aparte del SSE a propósito: pegarle a GitHub una vez por segundo
-// por cada widget abierto sería absurdo. El TTL de 60s vive en github.js.
-app.get('/api/issues', async (req, res) => {
+// ── Emparejamiento: qué trabajo no tiene a nadie encima ─────────────────────
+// El PAT ya NO pasa por acá. El navegador consulta GitHub directamente (la API
+// acepta CORS) y nos manda solo los TÍTULOS. Nosotros no custodiamos ninguna
+// credencial del usuario, que es la única respuesta buena a "¿y esto es seguro?".
+app.post('/api/emparejar', async (req, res) => {
   const token = tokenOf(req);
   if (!token) return res.status(404).json({ ok: false });
 
-  const est = github.estado(token);
-  if (!est.conectado) return res.json({ conectado: false, pares: [], sinNadie: [] });
+  const items = Array.isArray(req.body?.issues) ? req.body.issues.slice(0, 240) : [];
+  if (!items.length) return res.json({ pares: [], sinNadie: [] });
 
-  const items = await github.refrescar(token);
   const snap = snapshot(token);
   const vivas = snap.sessions.filter((x) => x.status !== 'stale');
 
@@ -493,25 +474,21 @@ app.get('/api/issues', async (req, res) => {
       const porId = new Map(vivas.map((x) => [x.sessionId, x]));
       const porNum = new Map(huerfanos.map((i) => [i.numero, i]));
       for (const p of ia.pares || []) {
-        const s = porId.get(p.sessionId);
+        const ses = porId.get(p.sessionId);
         const it = porNum.get(p.numero);
-        if (s && it) {
-          pares.push({ sessionId: s.sessionId, label: s.label, numero: it.numero,
+        if (ses && it) {
+          pares.push({ sessionId: ses.sessionId, label: ses.label, numero: it.numero,
                        repo: it.repo, titulo: it.titulo, esPR: it.esPR,
                        como: 'semejanza', porque: p.porque });
         }
       }
-      const emparejados = new Set(pares.map((p) => p.numero));
-      sinNadie = huerfanos.filter((i) => !emparejados.has(i.numero));
+      const ya = new Set(pares.map((p) => p.numero));
+      sinNadie = huerfanos.filter((i) => !ya.has(i.numero));
     }
   }
 
   res.json({
-    conectado: true,
-    repos: est.repos,
-    error: est.error,
     pares,
-    // Lo que importa: trabajo abierto que ninguna conversación está atendiendo.
     sinNadie: sinNadie.map((i) => ({
       numero: i.numero, repo: i.repo, titulo: i.titulo,
       esPR: i.esPR, asignado: i.asignado, url: i.url,
