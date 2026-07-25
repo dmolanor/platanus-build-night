@@ -39,21 +39,21 @@
   <p id="empty" class="empty" hidden>Nadie te está esperando. Estás al día.</p>
 </main>
 
-<!-- C · vista de peaje -->
+<!-- C · alerta de deuda alta.
+     NO bloquea nada: fingir un bloqueo que el usuario cierra con un clic era la
+     parte más juguete del producto. Aquí solo se grita el número y se ofrece lo
+     único útil en ese momento: el ranking de a dónde volver. -->
 <section id="view-toll" class="view">
   <div id="ball-toll" class="toll-ball"></div>
   <div class="toll-inner">
-    <div class="toll-tag">Peaje</div>
+    <div class="toll-tag">Deuda alta</div>
     <div id="toll-debt" class="toll-debt">0</div>
     <div class="toll-sub">agent-minutos que les debes</div>
-    <!-- Único plano a pantalla completa del pitch: aquí va la tesis, no solo la cifra. -->
     <div id="toll-human" class="toll-human"></div>
     <section id="permits-toll" class="permits"></section>
     <p id="toll-more" class="permit-more" hidden></p>
     <div id="toll-lock">
-      <p id="toll-lock-text" class="toll-lock-text"></p>
-      <div class="lockbar"><i id="lockbar-fill"></i></div>
-      <button id="toll-pay" class="btn big" type="button" disabled>Pagar el peaje</button>
+      <button id="toll-pay" class="btn big" type="button">Dime a dónde volver</button>
     </div>
   </div>
 </section>
@@ -76,7 +76,6 @@ import { mount, setLevel } from './character.js';
 
 const TOKEN = new URLSearchParams(location.search).get('token') || '';
 const QT = encodeURIComponent(TOKEN);
-const TOLL_LOCK_MS = 90_000;     // bloqueo cuando no hay permisos que decidir
 const TOLL_GRACE_MS = 30_000;    // tras pagar, no vuelvas a caer al peaje enseguida
 
 const $ = (id) => document.getElementById(id);
@@ -91,7 +90,6 @@ const S = {
   sessions: [],
   permits: [],
   view: 'normal',
-  tollEnteredAt: 0,
   tollGraceUntil: 0,
   paying: false,
   offline: true,
@@ -528,36 +526,17 @@ function setView(view) {
 
 // ── VISTA C · peaje ─────────────────────────────────────────────────────────
 function enterToll() {
-  S.tollEnteredAt = Date.now();
   setView('toll');
-  say('Peaje. Les debes ' + Math.round(S.totalWaitedMs / 60000) + ' agent-minutos.');
+  announce(Math.round(S.totalWaitedMs / 60000) + ' agent-minutos parados. Te digo a cuál volver.');
 }
 
 function renderTollLock() {
   if (S.view !== 'toll') return;
-  const hayPermisos = activePermits().length > 0;
-  const lock = $('toll-lock');
-  lock.hidden = hayPermisos;   // con un permiso encima, la salida es decidirlo
-  if (hayPermisos) return;
-
-  const left = Math.max(0, S.tollEnteredAt + TOLL_LOCK_MS - Date.now());
-  const listo = left <= 0;
-  const pct = ((TOLL_LOCK_MS - left) / TOLL_LOCK_MS) * 100;
-  $('lockbar-fill').style.width = Math.min(100, Math.max(0, pct)).toFixed(1) + '%';
-
-  const txt = $('toll-lock-text');
-  if (listo) {
-    txt.textContent = 'Peaje cumplido. Cóbrate el brief de lo que estaba pasando.';
-  } else {
-    txt.replaceChildren(
-      document.createTextNode('No hay permisos que decidir. El peaje se paga con tiempo: '),
-      el('b', null, Math.ceil(left / 1000) + 's'),
-      document.createTextNode('.'),
-    );
-  }
+  // Con un permiso encima, lo urgente es decidirlo: el botón estorba.
+  $('toll-lock').hidden = activePermits().length > 0;
   const btn = $('toll-pay');
-  btn.disabled = !listo || S.paying;
-  btn.textContent = S.paying ? 'Saliendo…' : listo ? 'Pagar el peaje' : 'Espera…';
+  btn.disabled = S.paying;
+  btn.textContent = S.paying ? 'Reconstruyendo…' : 'Dime a dónde volver';
 }
 
 async function payToll() {
@@ -593,20 +572,38 @@ $('toll-pay').addEventListener('click', payToll);
 function buildBriefItem() {
   const root = el('li', 'brief-item');
   const rank = el('span', 'brief-rank');
+  const head = el('div', 'brief-headline');
+  const tag = el('span', 'brief-tagchip');
   const who = el('div', 'brief-who');
   const whoRepo = el('b');
   const whoRest = el('span');
   who.append(whoRepo, whoRest);
   const why = el('div', 'brief-why');
   const action = el('div', 'brief-action');
-  root.append(rank, who, why, action);
+  root.append(rank, head, tag, who, why, action);
+
+  // La etiqueta es lo que el ranking mecánico no puede decir: no que está
+  // esperando, sino CÓMO tratarla.
+  const TAGS = {
+    casi_lista: 'casi lista',
+    bloqueada: 'bloqueada',
+    en_loop: 'en loop',
+    cara_de_retomar: 'cara de retomar',
+    ya_no_importa: 'ya no importa',
+  };
 
   function update(item) {
     rank.textContent = String(item._i);
+    head.textContent = item.label || basename(item.repo);
+    const t = TAGS[item.tag];
+    tag.textContent = t || '';
+    tag.hidden = !t;
+    tag.dataset.tag = item.tag || '';
     whoRepo.textContent = basename(item.repo);
-    whoRest.textContent = ` · ${item.who || 'alguien'} · ${item.minutes != null ? item.minutes + ' min' : '—'}`;
+    whoRest.textContent = ` · ${item.who || 'alguien'} · ${item.minutes != null ? item.minutes + ' agent-min' : '—'}`;
     why.textContent = item.why ? String(item.why) : 'esperando';
-    action.textContent = item.action ? String(item.action) : 'Ve a esta.';
+    action.textContent = item.action ? '→ ' + String(item.action) : '';
+    action.hidden = !item.action;
   }
 
   return { el: root, update };

@@ -38,9 +38,11 @@ export function fallbackBrief(snap) {
     // defecto, así el brief no contradice lo que ya tenías en pantalla.
     items: ranked.map((s) => ({
       sessionId: s.sessionId,
+      label: s.label,
       repo: s.repo,
       who: s.who,
       minutes: minutes(s.costMs ?? s.waitedMs),
+      tag: s.loopCount >= 1 ? 'en_loop' : s.reason === 'completed' ? 'casi_lista' : 'bloqueada',
       why: s.why || 'Te está esperando',
       action: s.action || 'Ve a esta primero',
     })),
@@ -119,20 +121,27 @@ export async function aiAdvice(permit, session, collision = null) {
   }
 }
 
+// `tag` es la señal que el ranking mecánico no puede producir: no dice que la
+// sesión está esperando (eso ya lo sabemos), dice CÓMO tratarla.
 const BRIEF_SCHEMA = {
   type: 'object',
   properties: {
-    headline: { type: 'string', description: 'Una frase en español con el costo total.' },
+    headline: { type: 'string', description: 'Una frase en español: por dónde empezar y por qué.' },
     items: {
       type: 'array',
+      description: 'En el orden en que conviene atenderlas. El orden ES la recomendación.',
       items: {
         type: 'object',
         properties: {
           sessionId: { type: 'string' },
-          why: { type: 'string', description: 'Qué pasa ahí. Máximo 12 palabras.' },
+          tag: {
+            type: 'string',
+            enum: ['casi_lista', 'bloqueada', 'en_loop', 'cara_de_retomar', 'ya_no_importa'],
+          },
+          why: { type: 'string', description: 'Dónde quedó, concreto. Máximo 14 palabras.' },
           action: { type: 'string', description: 'Qué hacer. Imperativo, máximo 12 palabras.' },
         },
-        required: ['sessionId', 'why', 'action'],
+        required: ['sessionId', 'tag', 'why', 'action'],
         additionalProperties: false,
       },
     },
@@ -140,6 +149,26 @@ const BRIEF_SCHEMA = {
   required: ['headline', 'items'],
   additionalProperties: false,
 };
+
+const BRIEF_SYSTEM = `El desarrollador acaba de volver al teclado. Tiene varias sesiones de Claude Code
+paradas esperándolo. Tu trabajo NO es repetir cuál lleva más tiempo — eso ya está calculado.
+Tu trabajo es decidir POR CUÁL EMPEZAR, usando lo que solo se ve leyendo cada sesión:
+
+1. CERCANÍA A TERMINAR — una sesión a un paso de cerrar es barata: ciérrala y baja el número de
+   frentes abiertos. Vale más que una que apenas arrancó, aunque lleve menos tiempo esperando.
+2. CONSECUENCIA DEL BLOQUEO — no todos los permisos pesan igual. Leer un archivo y borrar una
+   tabla de producción son ambos "permiso"; solo uno es urgente.
+3. COSTO DE RETOMARLA — reconstruir el contexto de un refactor que dejó hace 40 minutos le cuesta
+   caro a él. Confirmar algo terminado no cuesta nada.
+4. VIGENCIA — si por lo que pidió después se ve que cambió de rumbo, esa sesión ya no importa:
+   dilo y recomienda cerrarla.
+
+Etiquetas: casi_lista · bloqueada · en_loop · cara_de_retomar · ya_no_importa.
+Si repite el mismo intento, es en_loop y se cierra: está quemando tokens sin avanzar.
+
+Devuelve los items EN EL ORDEN EN QUE CONVIENE ATENDERLOS — ese orden es tu recomendación, y
+puede diferir del orden por costo que te doy. En español, seco, sin cortesías.
+Usa los sessionId tal cual.`;
 
 // El corazón del producto: cuando vuelves, lo caro no es saber a cuál ir,
 // es reconstruir qué estaba pasando en cada una.
@@ -158,28 +187,26 @@ export async function aiBrief(snap) {
         model: MODEL,
         max_tokens: 6000,
         output_config: { effort: 'low', format: { type: 'json_schema', schema: BRIEF_SCHEMA } },
-        system:
-          'El desarrollador acaba de volver al teclado. Tiene varias sesiones de Claude Code paradas ' +
-          'esperándolo. Reconstruye qué pasaba en cada una y ordénalas por urgencia real.\n' +
-          'Busca tres señales: (1) bloqueo real — pidió permiso, falló, necesita decisión; ' +
-          '(2) terminado y listo — solo falta confirmar; (3) en loop — repite el mismo intento, ' +
-          'y ahí recomienda CERRARLA porque quema tokens sin avanzar.\n' +
-          'Todo en español, seco, sin cortesías. Devuelve los items ya ordenados, el más urgente primero. ' +
-          'Usa los sessionId tal cual te los doy.',
+        system: BRIEF_SYSTEM,
         messages: [
           {
             role: 'user',
             content:
-              `Deuda total: ${minutes(snap.totalWaitedMs)} agent-minutos.\n\n` +
+              `Deuda total: ${minutes(snap.totalWaitedMs)} agent-minutos.\n` +
+              `Orden por costo mecánico (referencia, no obligación):\n\n` +
               ranked
                 .map(
-                  (s) =>
-                    `- sessionId: ${s.sessionId} | repo: ${s.repo} | de: ${s.who} | ` +
-                    `estado: ${s.status}/${s.reason} | esperando: ${minutes(s.waitedMs)} min | ` +
-                    `intentos repetidos: ${s.loopCount} | tareas abiertas: ${s.tasksOpen}\n` +
-                    `  último mensaje: ${s.lastMessage || '(ninguno)'}`,
+                  (s, i) =>
+                    `${i + 1}. sessionId: ${s.sessionId}\n` +
+                    `   se llama: ${s.label}\n` +
+                    `   repo: ${s.repo} · de: ${s.who} · ${s.status}/${s.reason}\n` +
+                    `   cuesta: ${minutes(s.costMs ?? s.waitedMs)} agent-min` +
+                    `${s.blockedAgents > 1 ? ` (${s.blockedAgents} agentes parados)` : ''}` +
+                    ` · intentos repetidos: ${s.loopCount}\n` +
+                    `   lo último que le pidió: ${s.lastPrompt || '(no registrado)'}\n` +
+                    `   dónde quedó: ${s.lastMessage || '(sin mensaje)'}`,
                 )
-                .join('\n'),
+                .join('\n\n'),
           },
         ],
       },
@@ -195,7 +222,12 @@ export async function aiBrief(snap) {
       .filter((i) => byId.has(i.sessionId))
       .map((i) => {
         const s = byId.get(i.sessionId);
-        return { sessionId: i.sessionId, repo: s.repo, who: s.who, minutes: minutes(s.waitedMs), why: i.why, action: i.action };
+        return {
+          sessionId: i.sessionId,
+          label: s.label, repo: s.repo, who: s.who,
+          minutes: minutes(s.costMs ?? s.waitedMs),
+          tag: i.tag || null, why: i.why, action: i.action,
+        };
       });
     if (!items.length) return fallback;
     return { source: 'ia', headline: out.headline || fallback.headline, items };

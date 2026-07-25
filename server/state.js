@@ -366,7 +366,7 @@ function speakFor(t, level, total, sessions) {
     } else if (level === 'angry') {
       t.speakText = `${min} agent-minutos parados. Eso lo estás costando tú.`;
     } else {
-      t.speakText = `Peaje. Les debes ${min} agent-minutos. No sigues hasta saldarlo.`;
+      t.speakText = `${min} agent-minutos. Te digo a cuál volver primero.`;
     }
   }
   return t.speakText;
