@@ -331,9 +331,14 @@ El error más caro del personaje, y vale escribirlo porque se repite. Con
 así que **el 61% del ancho del viewBox estaba vacío**, y `preserveAspectRatio: meet` encajona una
 forma vertical dentro de un cuadrado hasta que cabe por su lado largo.
 
-El viewBox es `25 5 54 105` y `.ball-slot` lleva esa misma proporción. Resultado: se dibuja ~2,7×
-más grande **ocupando menos ancho de layout que antes**, así que el bloque de texto de al lado ganó
+El viewBox es `25 5 54 105` y `.ball-slot` lleva esa misma proporción. Resultado: se dibuja **1,9×
+más grande ocupando 12 px MENOS de ancho de layout**, así que el bloque de texto de al lado ganó
 espacio en vez de perderlo.
+
+El tamaño exacto no es a ojo: un hero más alto le quita altura al área de scroll, y ahí viven las
+conversaciones. Medida la curva a 380×280, **30×58 es la frontera eficiente** — 1,9× el plátano por
+3 px de hero. El siguiente escalón (34×66) compra 29% más área y cuesta 11 px de scroll: un
+intercambio 3,7 veces peor. La tabla completa está en el comentario de `theme.css`.
 
 Corolario: el puré tiene el mismo ancho que el plátano. Dos siluetas de anchos distintos dentro de
 un viewBox recortado se ven descentradas una respecto de la otra. Y la cara, que en el plátano va

@@ -114,16 +114,29 @@ body[data-level="angry"], .pings-char[data-level="angry"] { --ball: #c8801f; --b
 body[data-level="toll"],  .pings-char[data-level="toll"]  { --ball: #7a5128; --ball-dark: #3c2410; }
 
 /* El slot NO es cuadrado, porque el plátano no lo es. Medido con `0 0 120 120` y un
-   slot de 42x42: se dibujaba a 16x34 px, el 30% del área. Con el viewBox recortado a
-   la tinta (character.js) y el slot en la misma proporción (54:105), se dibuja ~2,7x
-   más grande ocupando MENOS ancho de layout, así que el texto de al lado gana espacio
-   en vez de perderlo. */
+   slot de 42x42: se dibujaba a 19x39 px, el 30% del área. Con el viewBox recortado a
+   la tinta (character.js) y el slot en la misma proporción (54:105), se dibuja casi el
+   DOBLE de grande ocupando MENOS ancho de layout: el texto de al lado gana espacio.
+
+   El tamaño exacto NO es a ojo. Se midió la curva del intercambio a 380x280, porque un
+   hero más alto le quita altura al área de scroll, y ahí viven las conversaciones:
+
+     slot     plátano   área    hero    scroll
+     42x42    19x39      735    89px    183px   ← antes
+     30x58    26x54     1401    92px    180px   ← acá
+     34x66    30x61     1814   100px    172px
+     36x70    31x65     2041   104px    168px
+
+   30x58 es la frontera eficiente: 1,9x el plátano por 3 px de hero. El siguiente
+   escalón compra 29% más área y cuesta 11 px de scroll — un intercambio 3,7 veces
+   peor. Después de ahí el rendimiento decrece rápido. */
 html .ball-slot {
-  width: clamp(32px, 8.9vw, 44px);
-  height: clamp(62px, 17.3vw, 86px);
+  width: clamp(28px, 7.9vw, 40px);
+  height: clamp(54px, 15.3vw, 78px);
 }
+/* A pantalla completa en un celular hay sitio de sobra: misma proporción, más grande. */
 @media (min-width: 560px) {
-  html .ball-slot { width: clamp(40px, 11vw, 54px); height: clamp(78px, 21.4vw, 105px); }
+  html .ball-slot { width: clamp(40px, 11.4vw, 58px); height: clamp(78px, 22.2vw, 113px); }
 }
 
 /* Cuerpo: trazo grueso, no contorno relleno. A 38 px un contorno con curvas finas
