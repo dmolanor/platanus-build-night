@@ -69,21 +69,25 @@
 
   /* Tira de maduración: explica la métrica sin una línea de prosa, porque todo el
      mundo sabe cómo se pone un plátano con el tiempo. */
+  /* El personaje es el protagonista del hero, no una nota al pie. A 44x86 competía
+     en tamaño con los puntitos que tiene al lado; es lo único de la página que se
+     MUEVE y que madura en vivo, y eso es exactamente lo que explica la métrica. */
+  /* Sin borde ni margen superior: aquí abre la columna, no separa de nada. */
   .ripen {
-    display: flex; align-items: center; gap: 14px;
-    margin: 28px 0 0; padding-top: 22px; border-top: 1px solid var(--line);
+    display: flex; align-items: center; gap: clamp(16px, 2.4vw, 28px);
+    margin: 0 0 4px;
   }
-  .ripen-char { width: 44px; height: 86px; flex: none; }
+  .ripen-char { width: clamp(96px, 12.5vw, 132px); height: clamp(188px, 24.4vw, 258px); flex: none; }
   .ripen-cap { min-width: 0; }
   .ripen-name {
-    font-family: var(--font-mono); font-size: 12px; letter-spacing: .1em;
+    font-family: var(--font-mono); font-size: 15px; letter-spacing: .12em;
     text-transform: uppercase; color: var(--ripe, var(--dim)); font-weight: 700;
     transition: color 500ms var(--ease); display: block;
   }
-  .ripen-why { font-size: 13px; color: var(--dim); margin: 3px 0 0; max-width: 34ch; }
-  .ripen-dots { display: flex; gap: 5px; margin-top: 8px; }
+  .ripen-why { font-size: 16px; color: var(--soft); margin: 6px 0 0; max-width: 30ch; }
+  .ripen-dots { display: flex; gap: 6px; margin-top: 12px; }
   .ripen-dots i {
-    width: 5px; height: 5px; border-radius: 50%; background: var(--line-2);
+    width: 6px; height: 6px; border-radius: 50%; background: var(--line-2);
     transition: background 400ms var(--ease);
   }
   .ripen-dots i[data-on="1"] { background: var(--ripe, var(--dim)); }
@@ -109,6 +113,10 @@
     gap: 56px; align-items: start;
     padding: 64px 0 56px;
   }
+  /* El logo NO se repite en el hero: el logo es un plátano y el personaje también,
+     y dos ilustraciones distintas de lo mismo en la misma pantalla se leen como un
+     error. El logo se queda en la barra, que es identidad; el hero es del personaje,
+     que es el que se mueve y madura. */
   .eyebrow {
     font-family: var(--font-mono); font-size: 11px; letter-spacing: .14em;
     text-transform: uppercase; color: var(--dim); margin: 0 0 20px;
@@ -127,9 +135,11 @@
 
   /* El widget de verdad, corriendo. Sin cromo de navegador falso, sin sombra. */
   .stage { display: flex; flex-direction: column; gap: 10px; }
+  /* 390 y no 430: el personaje ahora vive encima, y entre los dos tienen que caber
+     en el pliegue de un portátil. El widget es responsive, no se recorta. */
   .stage-frame {
     border: 1px solid var(--line-2); border-radius: var(--r-3);
-    background: var(--ink-1); overflow: hidden; height: 430px;
+    background: var(--ink-1); overflow: hidden; height: 390px;
   }
   .stage-frame iframe { border: 0; width: 100%; height: 100%; display: block; }
   .stage-cap {
@@ -332,9 +342,14 @@
         <a class="btn" href="#instalar">Instalar en 30 segundos</a>
         <button class="ghost" id="demo" type="button">Ver la escalada completa</button>
       </div>
+    </div>
 
+    <div class="stage">
       <!-- La maduración explica la métrica sin una sola línea de prosa: todo el mundo
-           sabe cómo se pone un plátano con el tiempo. -->
+           sabe cómo se pone un plátano con el tiempo.
+           Va arriba de la columna derecha, no al pie de la izquierda: ahí abajo
+           empezaba en y=649 y terminaba en 907, o sea que en un portátil se veía
+           cortado por la mitad. Un protagonista no puede estar en el pliegue. -->
       <div class="ripen">
         <div class="ripen-char" id="ripen-slot"></div>
         <div class="ripen-cap">
@@ -343,9 +358,6 @@
           <div class="ripen-dots" id="ripen-dots"><i></i><i></i><i></i><i></i></div>
         </div>
       </div>
-    </div>
-
-    <div class="stage">
       <div class="stage-frame"><iframe id="preview" title="El widget de Pings, corriendo"></iframe></div>
       <p class="stage-cap"><span class="live"></span> No es una maqueta. Es el widget, con datos de demo.</p>
     </div>
