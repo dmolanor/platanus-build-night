@@ -56,16 +56,23 @@
     }
   }
 
-  // Solo lo que difiere del default entra en la URL. Un QR con menos caracteres es un
-  // QR menos denso, y este se escanea desde un celular a medio metro.
+  // La URL lleva los ajustes EXPLÍCITOS, no solo los que difieren del default.
+  // Emitir solo las diferencias parecía más limpio (un QR más corto es un QR menos
+  // denso) pero abre un desajuste: sin el param, el widget cae al localStorage, y la
+  // landing y el widget comparten origen. Si la URL decía una cosa y el localStorage
+  // otra, ganaba el localStorage y el ajuste se ignoraba en silencio.
+  //
+  // `voice` es la excepción y va solo cuando está apagada: es el único ajuste que el
+  // widget puede cambiar por su cuenta (tiene botón de mute). Fijarlo en la URL haría
+  // que cada recarga le pisara al usuario lo que acaba de apretar.
   function query(token) {
     var s = read();
     var out = [];
     if (token) out.push('token=' + encodeURIComponent(token));
-    if (s.rate !== DEFAULTS.rate) out.push('rate=' + s.rate);
-    if (!s.money) out.push('money=0');
-    if (s.sens !== DEFAULTS.sens) out.push('sens=' + s.sens);
-    if (!s.face) out.push('face=0');
+    out.push('rate=' + s.rate);
+    out.push('money=' + (s.money ? '1' : '0'));
+    out.push('sens=' + s.sens);
+    out.push('face=' + (s.face ? '1' : '0'));
     if (!s.voice) out.push('voice=0');
     return out.join('&');
   }

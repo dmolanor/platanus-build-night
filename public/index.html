@@ -210,8 +210,14 @@
   .qr div { flex: 1; min-width: 230px; }
 
   footer {
-    max-width: 1100px; margin: 0 auto; padding: 24px;
+    max-width: 1100px; margin: 0 auto; padding: 24px 24px 64px;
     border-top: 1px solid var(--line); color: var(--dim); font-size: 13.5px;
+  }
+  footer p { margin: 0 0 10px; max-width: 78ch; }
+  footer strong { color: var(--soft); }
+  footer .tradeoff {
+    border-left: 2px solid var(--line-2); padding-left: 14px; margin-top: 16px;
+    color: var(--dim-2);
   }
 
   @media (max-width: 880px) {
@@ -403,11 +409,12 @@ ranking      = costo × peso(motivo) × (1 + loops)
 
         <div class="set-row">
           <div>
-            <h3>La carita</h3>
-            <p>Apágala y el producto sigue sirviendo: la lista ordenada es la que hace el trabajo.
-              Está acá para que lo compruebes, no para que nos creas.</p>
+            <h3>El plátano</h3>
+            <p>Se pone verde, amarillo, manchado y puré según cuánto lleves debiendo. Apágalo y el
+              producto sigue sirviendo: la lista ordenada es la que hace el trabajo. Está acá para
+              que lo compruebes, no para que nos creas.</p>
           </div>
-          <div class="set-ctl"><button class="toggle" id="s-face" type="button" aria-pressed="true">carita</button></div>
+          <div class="set-ctl"><button class="toggle" id="s-face" type="button" aria-pressed="true">plátano</button></div>
         </div>
 
         <div class="set-row">
@@ -477,8 +484,10 @@ ranking      = costo × peso(motivo) × (1 + loops)
       <ul class="plain">
         <li><strong>No te bloquea la máquina.</strong> El peaje toma la ventana del widget y nada más.
           Tu terminal sigue intacta y puedes cerrarlo. Esta versión apuesta a que ver el número basta.</li>
-        <li><strong>No lee tus transcripts.</strong> Solo eventos estructurados de hook: herramienta,
-          comando, último mensaje. Nunca tu código.</li>
+        <li><strong>No minimiza los datos que recibe.</strong> El hook manda el payload nativo
+          completo y no hay cliente local que lo filtre: en un <code class="tok">Write</code> eso
+          incluye el contenido del archivo. Guardamos una fracción y no persistimos nada, pero
+          recibir poco y guardar poco no son lo mismo. Detalle abajo.</li>
         <li><strong>No es un dashboard de PRs e issues.</strong> GitHub ya lo hace bien.</li>
         <li><strong>No hay cuentas ni base de datos.</strong> El estado vive en memoria y cada
           redeploy lo borra.</li>
@@ -492,8 +501,18 @@ ranking      = costo × peso(motivo) × (1 + loops)
 </main>
 
 <footer>
-  Se envían eventos de hook y nada más. Nunca tu código ni tu transcript. Efímeros, en memoria, sin
-  persistencia.
+  <p><strong>Nunca sale de tu máquina:</strong> el transcript (solo llega su ruta; el servidor no
+    puede leer tu disco), tu repositorio, tus archivos en reposo, tus credenciales.</p>
+  <p><strong>Sí viaja:</strong> los hooks mandan el payload nativo completo de cada evento, sin
+    cliente local que lo filtre. Eso incluye el prompt que escribes, el contenido de un archivo en un
+    <code class="tok">Write</code>, el diff de un <code class="tok">Edit</code>, el comando y su
+    salida en <code class="tok">Bash</code>, y la respuesta final del modelo.</p>
+  <p><strong>Se guarda una fracción:</strong> título 80 caracteres, último prompt 90, último mensaje
+    600, firma de herramienta 120. El resto se descarta al llegar. Sin logs, sin persistencia, en
+    memoria.</p>
+  <p class="tradeoff">El tradeoff, dicho de frente: cambiamos minimización de datos por instalación
+    sin instalar nada. Un relay local filtraría en el origen, y es justo lo que quitamos para que el
+    onboarding fueran 30 segundos. El modo local es lo primero del roadmap.</p>
 </footer>
 
 <script>

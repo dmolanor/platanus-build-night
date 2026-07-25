@@ -270,14 +270,60 @@ oportunidad. La copy siempre dice **capacidad**, nunca cómputo ni gasto.
 Enunciarlos es criterio de scope, mismo argumento que el doc §6.
 
 - **Sin modo claro.** El widget flota sobre una terminal. Oscuro no es preferencia, es contexto.
-- **Sin ilustraciones ni doodles.** La bola de `character.js` **es** la ilustración, ya existe, y es
-  una sola (representa la deuda, no a los agentes). Un doodle mal hecho lee peor que ninguno.
+- **Sin ilustraciones ni doodles sueltos.** El personaje de `character.js` (§10) **es** la
+  ilustración, y es uno solo (representa la deuda, no a los agentes). Un doodle mal hecho lee peor
+  que ninguno.
 - **Sin i18n.** Todo en español.
 - **Sin librerías, sin bundler, sin webfonts.** `CONTRACT.md` §8.
 
 ---
 
-## 9. Deuda conocida
+## 9. El personaje: un plátano que madura
+
+Era una bola con cara. Ahora es un plátano, y el cambio es de tesis, no de gusto.
+
+**La maduración *es* la métrica.** Una bola necesita una cara que te *diga* que está enojada. Un
+plátano que se pone marrón *muestra* tiempo acumulado sin que nadie lo explique. Es el único objeto
+cotidiano cuya apariencia es un reloj, y esta herramienta mide exactamente eso: tiempo transcurrido
+desde que hacías falta.
+
+**Culpa a la entropía, no a ti.** El doc §1 abandonó *"tú eres el rate limiter"* porque convertía al
+usuario en el defecto. Una bola roja vibrando de rabia arrastra ese problema: está enojada *contigo*.
+Un plátano madurándose no acusa a nadie. Solo pasó el tiempo.
+
+Y es Platanus Build Night. El chiste sale gratis.
+
+| Nivel | Estado | `--ball` | `--ball-dark` |
+|---|---|---|---|
+| `calm` | verde, sonriendo | `#9fd356` | `#4a7a1e` |
+| `nudge` | amarillo, primeras manchas | `#f5c518` | `#9a7400` |
+| `angry` | manchado, ceño | `#c8801f` | `#6b3d08` |
+| `toll` | puré | `#7a5128` | `#3c2410` |
+
+Reglas de construcción, todas por una razón concreta:
+
+- **El cuerpo es un trazo grueso, no un contorno relleno.** El widget dibuja el personaje a
+  `clamp(38px, 11vw, 64px)`. Un círculo sobrevive cualquier escala; una silueta de plátano con
+  curvas finas se convierte en una mancha. Un `stroke-width: 28` con puntas redondas aguanta.
+- **`character.js` reusa los nombres de clase de la bola** (`ch-all`, `ch-body-g`, `ch-face`,
+  `ch-pupils`, `ch-lids`, `ch-brow`, `ch-mouth`). Todas las animaciones por nivel siguen viviendo
+  en `style.css` y **el plátano las hereda enteras sin tocar ese archivo**.
+- **Las manchas están siempre en el DOM** y el nivel solo cambia su opacidad, así que madurar es
+  una transición y no un salto de markup.
+- **Los párpados se recortan contra los ojos, no contra el cuerpo.** Es más correcto que en la bola
+  (un párpado es parte del ojo) y además resuelve que un trazo no sirve como `clipPath`, que solo
+  entiende geometría rellena.
+- **El puré va centrado en `y≈69`, no pegado al piso del viewBox.** La vista de peaje escala el
+  personaje a `min(150vw, 150vh)` centrado: cualquier cosa dibujada abajo se sale de la ventana y
+  la cara desaparece. Costó un bug encontrarlo.
+- **Solo se mueve `--ball`.** `--hot` (el número de la deuda) y `--red` (permisos) siguen rojos: el
+  rojo es la alarma, el plátano es el tiempo. Son dos canales distintos y no deben fusionarse.
+- **Nada de PNG.** `peaje-brief` §4.2 manda SVG + CSS, y cuatro rásters serían cuatro requests de
+  red más el estilo de ilustración con degradados que §5 prohíbe.
+
+---
+
+## 10. Deuda conocida
 
 - **`public/style.css` sigue declarando su propio `:root`.** `theme.css` se carga después y gana la
   cascada, así que el sistema es uno solo en la práctica, pero hay dos bloques de tokens en el

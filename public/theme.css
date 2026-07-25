@@ -90,3 +90,64 @@ html[data-face="0"] .toll-ball { display: none; }
   outline: 2px solid var(--warn);
   outline-offset: 2px;
 }
+
+/* ── El plátano ─────────────────────────────────────────────────────────────
+   character.js dibuja un plátano en vez de una bola, reusando los mismos nombres
+   de clase. Todas las animaciones por nivel (breathe, stare, deform, vibrate,
+   loom, sway) siguen viviendo en style.css y no se tocan: acá solo se redefine
+   la geometría y el color. El razonamiento está en DESIGN.md §2.
+
+   La maduración ES la métrica: verde → amarillo → manchado → puré. Solo se mueve
+   --ball, que es el token del personaje. --hot (el número de la deuda) y --red
+   (permisos) siguen rojos: el rojo es la alarma, el plátano es el tiempo. */
+
+body[data-level="calm"]  { --ball: #9fd356; --ball-dark: #4a7a1e; }
+body[data-level="nudge"] { --ball: #f5c518; --ball-dark: #9a7400; }
+body[data-level="angry"] { --ball: #c8801f; --ball-dark: #6b3d08; }
+body[data-level="toll"]  { --ball: #7a5128; --ball-dark: #3c2410; }
+
+/* Cuerpo: trazo grueso, no contorno relleno. A 38 px un contorno con curvas finas
+   se vuelve una mancha; un trazo de 28 sobrevive la escala. */
+.ch-body {
+  fill: none;
+  stroke: var(--ball);
+  stroke-width: 28;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: stroke 600ms ease;
+}
+
+.ch-stem, .ch-tip {
+  fill: none;
+  stroke: var(--ball-dark);
+  stroke-width: 7;
+  stroke-linecap: round;
+  transition: stroke 600ms ease;
+}
+
+.ch-shine {
+  fill: none;
+  stroke: #fff;
+  stroke-width: 5;
+  stroke-linecap: round;
+  opacity: .16;
+}
+
+/* Las manchas están siempre en el DOM: el nivel solo cambia su opacidad, así que
+   madurar es una transición y no un salto de markup. */
+.ch-spot { fill: var(--ball-dark); opacity: 0; transition: opacity 700ms ease; }
+.peaje-char[data-level="nudge"] .ch-spot { opacity: .3; }
+.peaje-char[data-level="angry"] .ch-spot { opacity: .85; }
+
+/* Puré. Pasado el umbral ya no hay plátano que salvar, y el cambio de silueta se
+   lee de un vistazo incluso a 38 px, que es más de lo que logra cualquier color. */
+.ch-banana, .ch-mush { transition: opacity 500ms ease; }
+.ch-mush { opacity: 0; }
+.ch-mush-body { fill: var(--ball); transition: fill 600ms ease; }
+
+.peaje-char[data-level="toll"] .ch-banana { opacity: 0; }
+.peaje-char[data-level="toll"] .ch-mush { opacity: 1; }
+/* La cara baja al charco. Un puré no tiene ojos a media altura. */
+.peaje-char[data-level="toll"] .ch-face { transform: translateY(9px) scale(.86); }
+/* Ya está en el suelo: no proyecta sombra aparte. */
+.peaje-char[data-level="toll"] .ch-shadow { opacity: 0; }
