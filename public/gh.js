@@ -67,6 +67,25 @@
     });
   }
 
+  /* Qué repos alcanza este PAT. Un token fine-grained solo ve los que le
+     marcaste, así que esta lista ES el alcance real del token — mejor que
+     escribir "dueño/repo" de memoria y descubrir el error después. */
+  async function listarRepos(pat) {
+    var r = await fetch('https://api.github.com/user/repos?per_page=100&sort=updated', {
+      headers: {
+        Authorization: 'Bearer ' + String(pat || '').trim(),
+        Accept: 'application/vnd.github+json',
+        'X-GitHub-Api-Version': '2022-11-28',
+      },
+      signal: AbortSignal.timeout(TIMEOUT),
+    });
+    if (!r.ok) throw new Error(r.status === 401 ? 'el token no es válido' : 'GitHub respondió ' + r.status);
+    var json = await r.json();
+    return json.map(function (x) {
+      return { full: x.full_name, privado: Boolean(x.private) };
+    });
+  }
+
   /** Trae los issues abiertos. Nunca lanza: devuelve {items, error}. */
   async function traer() {
     if (!configurado()) return { items: [], error: null, conectado: false };
@@ -80,5 +99,5 @@
   }
 
   window.PINGS_GH = { configurado: configurado, guardar: guardar, olvidar: olvidar,
-                      traer: traer, repos: repos };
+                      traer: traer, repos: repos, listarRepos: listarRepos };
 })();

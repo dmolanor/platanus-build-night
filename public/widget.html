@@ -238,8 +238,32 @@ function showBubble(text) {
   }, 9000);
 }
 
+// El widget vive en un iframe dentro de la PiP. El clic que abrió la ventana
+// ocurrió en la pestaña MADRE, así que este documento nunca recibió un gesto y el
+// navegador bloquea el audio — y como todo va en try/catch, fallaba en silencio.
+// Basta un gesto acá dentro para desbloquear el canal. Cualquier clic sirve.
+let audioListo = false;
+function desbloquearAudio() {
+  if (audioListo) return;
+  audioListo = true;
+  try {
+    const a = new Audio('data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=');
+    a.volume = 0;
+    a.play().catch(() => {});
+  } catch (_) {}
+  try {
+    const u = new SpeechSynthesisUtterance(' ');
+    u.volume = 0;
+    if (synth) synth.speak(u);
+  } catch (_) {}
+  document.body.dataset.audio = '1';
+  paintMute();
+}
+addEventListener('pointerdown', desbloquearAudio, { once: true });
+addEventListener('keydown', desbloquearAudio, { once: true });
+
 function paintMute() {
-  $('mute').textContent = S.muted ? 'voz off' : 'voz on';
+  $('mute').textContent = S.muted ? 'voz off' : (audioListo ? 'voz on' : 'toca para oír');
   $('mute').setAttribute('aria-pressed', S.muted ? 'true' : 'false');
 }
 $('mute').addEventListener('click', () => {

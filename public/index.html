@@ -173,6 +173,21 @@
   .set-ctl input[type=number] { width: 88px; text-align: right; }
   .unit { font-family: var(--font-mono); font-size: 12px; color: var(--dim); }
 
+  /* GitHub: dos pasos numerados, porque dos campos sin etiqueta no dicen qué va
+     en cada uno. */
+  .gh-ctl { flex-direction: column; align-items: stretch; gap: 7px; min-width: 260px; }
+  .gh-lbl {
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: .08em;
+    text-transform: uppercase; color: var(--dim);
+  }
+  .gh-lbl .hint { text-transform: none; letter-spacing: 0; font-size: 11px; }
+  #gh-repos-sel {
+    font-family: var(--font-mono); font-size: 12.5px;
+    background: var(--ink-0); border: 1px solid var(--line); color: var(--text);
+    border-radius: var(--r-2); padding: 5px;
+  }
+  #gh-repos-sel[hidden] { display: none; }
+
   .seg { display: flex; border: 1px solid var(--line-2); border-radius: var(--r-2); overflow: hidden; }
   .seg button {
     background: transparent; color: var(--dim); border: 0; border-radius: 0;
@@ -417,11 +432,23 @@ ranking      = costo × peso(motivo) × (1 + loops)
               para emparejarlos con tus conversaciones. Usa uno <em>fine-grained</em>, de solo
               lectura y con expiración corta.</p>
           </div>
-          <div class="set-ctl" style="flex-direction:column;align-items:stretch;gap:6px">
-            <input type="text" id="gh-pat" size="24" spellcheck="false" placeholder="github_pat_…">
-            <input type="text" id="gh-repos" size="24" spellcheck="false" placeholder="dueño/repo, dueño/otro">
+          <div class="set-ctl gh-ctl">
+            <label class="gh-lbl" for="gh-pat">1 · Pega tu token</label>
             <div class="row" style="gap:6px">
-              <button class="sm" id="gh-guardar" type="button">Guardar</button>
+              <input type="password" id="gh-pat" size="22" spellcheck="false"
+                     autocomplete="off" placeholder="github_pat_11AB…">
+              <button class="sm" id="gh-conectar" type="button">Conectar</button>
+            </div>
+
+            <!-- El desplegable sale de preguntarle a GitHub qué alcanza ESTE token.
+                 Escribir "dueño/repo" de memoria es la forma más fácil de configurar
+                 mal algo y no enterarte hasta que no aparece ningún issue. -->
+            <label class="gh-lbl" for="gh-repos-sel" id="gh-lbl2" hidden>2 · Elige los repos
+              <span class="hint">(Ctrl o Cmd para varios)</span></label>
+            <select id="gh-repos-sel" multiple size="5" hidden></select>
+
+            <div class="row" style="gap:6px">
+              <button class="sm" id="gh-guardar" type="button" hidden>Guardar</button>
               <button class="ghost sm" id="gh-olvidar" type="button">Olvidar</button>
             </div>
             <span class="hint" id="gh-estado" style="font-size:12px"></span>
@@ -666,18 +693,59 @@ $('#s-who').oninput = () => { PINGS.save({ who: $('#s-who').value }); pintarBloq
 // El PAT solo se escribe, nunca se lee de vuelta a la pantalla ni se manda a
 // ningún lado. Vive en localStorage de esta máquina.
 function pintarGH() {
-  const ok = PINGS_GH.configurado();
-  $('#gh-estado').textContent = ok
+  $('#gh-estado').textContent = PINGS_GH.configurado()
     ? 'conectado · ' + PINGS_GH.repos().join(', ')
     : 'sin conectar';
-  $('#gh-repos').value = PINGS_GH.repos().join(', ');
 }
+
+// El PAT se valida contra GitHub ANTES de guardarlo. Si el token está mal, te
+// enteras acá y no cuando el widget no muestre nada sin explicar por qué.
+$('#gh-conectar').onclick = async () => {
+  const pat = $('#gh-pat').value.trim();
+  if (!pat) return;
+  $('#gh-estado').textContent = 'consultando GitHub…';
+  try {
+    const lista = await PINGS_GH.listarRepos(pat);
+    if (!lista.length) {
+      $('#gh-estado').textContent = 'el token no alcanza ningún repo — revisa a qué repos lo limitaste';
+      return;
+    }
+    const sel = $('#gh-repos-sel');
+    const ya = new Set(PINGS_GH.repos());
+    sel.replaceChildren();
+    for (const r of lista) {
+      const o = document.createElement('option');
+      o.value = r.full;
+      o.textContent = r.full + (r.privado ? ' · privado' : '');
+      o.selected = ya.has(r.full);
+      sel.appendChild(o);
+    }
+    sel.hidden = false;
+    $('#gh-lbl2').hidden = false;
+    $('#gh-guardar').hidden = false;
+    $('#gh-estado').textContent = lista.length + ' repos al alcance de este token';
+    PINGS_GH.guardar(pat, PINGS_GH.repos().join(', '));
+  } catch (e) {
+    $('#gh-estado').textContent = String(e.message || e);
+  }
+};
+
 $('#gh-guardar').onclick = () => {
-  PINGS_GH.guardar($('#gh-pat').value, $('#gh-repos').value);
+  const elegidos = [...$('#gh-repos-sel').selectedOptions].map((o) => o.value);
+  if (!elegidos.length) { $('#gh-estado').textContent = 'elige al menos un repo'; return; }
+  PINGS_GH.guardar(null, elegidos.join(', '));
   $('#gh-pat').value = '';
   pintarGH();
 };
-$('#gh-olvidar').onclick = () => { PINGS_GH.olvidar(); $('#gh-pat').value = ''; pintarGH(); };
+
+$('#gh-olvidar').onclick = () => {
+  PINGS_GH.olvidar();
+  $('#gh-pat').value = '';
+  $('#gh-repos-sel').hidden = true;
+  $('#gh-lbl2').hidden = true;
+  $('#gh-guardar').hidden = true;
+  pintarGH();
+};
 pintarGH();
 
 $('#yatengo').onclick = () => {
