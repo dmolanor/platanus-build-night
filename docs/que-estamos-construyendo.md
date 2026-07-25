@@ -54,13 +54,13 @@ El hook **`PermissionRequest`** de Claude Code acepta que un handler responda `a
 **en nombre del usuario**. Eso significa que un tercero puede destrabar un agente congelado.
 
 ```
-Claude Code  ──PermissionRequest (HTTP)──▶  Peaje  ──SSE──▶  widget / celular
+Claude Code  ──PermissionRequest (HTTP)──▶  Pings  ──SSE──▶  widget / celular
      ▲                                        │
      └────────── {allow | deny} ──────────────┘
 ```
 
 **Garantía dura:** si nadie decide en 85 s, el servidor responde vacío y Claude Code muestra el
-prompt normal. Un timeout de hook es error **no bloqueante**. Peaje nunca cuelga un agente.
+prompt normal. Un timeout de hook es error **no bloqueante**. Pings nunca cuelga un agente.
 *(Verificado en producción: 200 vacío a los 85,15 s; el proxy de Render aguanta.)*
 
 **Regla de no-estorbo:** solo retiene si la deuda indica que estás ausente. Si estás en el teclado,
@@ -132,7 +132,7 @@ son las **sesiones en loop**, contadas aparte.
 
 ## 5. El piloto automático
 
-Lo único en todo Peaje que **ejecuta algo en tu máquina sin que mires**. Apagado por defecto.
+Lo único en todo Pings que **ejecuta algo en tu máquina sin que mires**. Apagado por defecto.
 
 Aprueba solo lo de una **lista blanca cerrada y determinista, sin modelo de por medio**:
 `Read`/`Glob`/`Grep` y comandos de shell de solo lectura. Solo si estás ausente, nunca si hay

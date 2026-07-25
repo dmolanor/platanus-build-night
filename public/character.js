@@ -6,9 +6,9 @@
 // es un reloj. Y de paso culpa a la entropía en vez de a ti, que es exactamente el
 // giro que pedía el doc §1 al abandonar "tú eres el rate limiter".
 //
-// Uno solo por ventana (montado en dos slots: normal y peaje), nunca uno por sesión.
+// Uno solo por ventana (montado en dos slots: normal y pings), nunca uno por sesión.
 //
-// SVG + CSS puro, como manda peaje-brief §4.2. Aquí solo se construye el SVG y se
+// SVG + CSS puro, como manda el brief original §4.2. Aquí solo se construye el SVG y se
 // pone data-level. El color, la deformación y las animaciones viven en el CSS.
 //
 // CONTRATO DE CLASES: los nombres ch-all / ch-body-g / ch-face / ch-pupils / ch-lids /
@@ -51,7 +51,7 @@ export function mount(host) {
   if (!host) return null;
 
   const root = document.createElement('div');
-  root.className = 'peaje-char';
+  root.className = 'pings-char';
   root.setAttribute('aria-hidden', 'true');
 
   const svg = node('svg', { viewBox: '0 0 120 120', preserveAspectRatio: 'xMidYMid meet' });
@@ -59,7 +59,7 @@ export function mount(host) {
   // Los párpados se recortan contra LOS OJOS, no contra el cuerpo. Es más correcto que
   // en la bola: un párpado es parte del ojo. Y de paso resuelve que un trazo no se
   // puede usar como clipPath (clipPath solo entiende geometría rellena).
-  const clipId = 'peaje-ojos-' + ++seq;
+  const clipId = 'pings-ojos-' + ++seq;
   const defs = node('defs');
   const clip = node('clipPath', { id: clipId });
   clip.appendChild(node('ellipse', { cx: 53, cy: 55, rx: 6, ry: 7 }));
@@ -98,7 +98,7 @@ export function mount(host) {
   // Pasado el umbral ya no hay plátano que salvar. El cambio de silueta dice más
   // que cualquier color: es el único estado que se lee de un vistazo a 38 px.
   //
-  // Va centrado alrededor de y=69, no pegado al piso del viewBox. La vista de peaje
+  // Va centrado alrededor de y=69, no pegado al piso del viewBox. La vista de deuda alta
   // escala el personaje a min(150vw,150vh) centrado: cualquier cosa dibujada abajo
   // se sale de la ventana y la cara desaparece.
   const mush = node('g', { class: 'ch-mush' });

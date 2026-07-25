@@ -1,4 +1,4 @@
-// Permisos retenidos: el corazón de Peaje.
+// Permisos retenidos: el corazón de Pings.
 //
 // Claude Code dispara PermissionRequest de forma SÍNCRONA y acepta que el hook responda
 // allow/deny en nombre del usuario. Sostenemos esa petición abierta mientras el humano

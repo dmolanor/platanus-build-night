@@ -1,14 +1,13 @@
-# Peaje
+# Pings
 
-**Tus agentes te están esperando a ti. Peaje mide esa deuda y te deja saldarla sin volver a la terminal.**
+**Te digo en cuál de tus agentes estás perdiendo más tiempo — y te deja arreglarlo ahí mismo, sin volver a la terminal.**
 
-> Históricamente el humano esperaba a la máquina.
-> Ahora varios agentes te están esperando a ti, y nadie mide ese costo.
-> **Tú eres el rate limiter.**
+> El ecosistema mide tokens, latencia del modelo y tasa de éxito del agente.
+> **Nadie mide cuánto tarda el humano en desbloquear.**
 
 Hacker: Diego Alejandro Molano Roa ([@dmolanor](https://github.com/dmolanor)) — Platanus Build Night, Bogotá @ Buk
 
-<img src="./project-logo.png" alt="Peaje" width="160" />
+<img src="./project-logo.png" alt="Pings" width="160" />
 
 ---
 
@@ -20,25 +19,27 @@ productivo. Ya tienes dashboards. Los ignoras igual.
 
 Todas las herramientas que existen **informan**. Ninguna **interviene**.
 
-## Qué hace Peaje
+## Qué hace Pings
 
 1. **Cuenta los agent-minutos** que tus agentes pierden esperándote — pesados por agentes
    realmente parados: una sesión detenida con 3 subagentes son **4 agentes parados**, no 1.
-2. **Escala la intervención** conforme crece la deuda: el personaje cambia de color, luego te
-   habla, y al pasar el umbral **cobra peaje** y te bloquea la pantalla.
-3. **El peaje se paga desbloqueando, no esperando.** Aprueba o deniega desde el widget flotante
-   los permisos que tienen agentes congelados, con una recomendación del modelo sobre cada uno.
-4. **Al salir recibes un brief** que reconstruye qué pasaba en cada sesión y cuál conviene matar
-   por estar dando vueltas.
+2. **Te dice a cuál volver.** El ranking mecánico ordena por costo; el modelo lo **re-ordena
+   por consecuencia**, que no es lo mismo: una sesión al 80% es más barata de cerrar que la más
+   cara, y una en loop no es una a la que volver sino una que se cierra.
+3. **Y te deja arreglarlo sin volver a la terminal.** Aprueba o deniega desde el widget flotante
+   —o desde el celular— los permisos que tienen agentes congelados, con una recomendación del
+   modelo sobre cada uno.
+4. **Mientras no estás, mantiene tus agentes andando.** El piloto automático aprueba lo rutinario
+   con una lista blanca cerrada, y te rinde cuentas de cada decisión al volver.
 
 ## Lo que lo hace posible
 
 El hook `PermissionRequest` de Claude Code acepta que un handler responda `allow`/`deny`
-**en nombre del usuario**. Peaje retiene esa petición mientras tú decides desde la ventana
+**en nombre del usuario**. Pings retiene esa petición mientras tú decides desde la ventana
 flotante — o desde el celular, es la misma URL.
 
 **Garantía dura:** si nadie decide en 85 s, el servidor responde vacío y Claude Code muestra el
-prompt normal en la terminal. Un timeout de hook es un error *no bloqueante*. **Peaje nunca cuelga
+prompt normal en la terminal. Un timeout de hook es un error *no bloqueante*. **Pings nunca cuelga
 un agente.** Y si estás en el teclado (deuda baja), ni siquiera interviene: pasa de largo.
 
 ## Instalación — sin instalar nada
@@ -110,7 +111,7 @@ memoria, TTL de 12 h.
 - Permisos por persona dentro de un equipo
 - Modo local sin nube
 - PRs e issues que te esperan, en el mismo ranking: la deuda no es solo con tus agentes
-- Versión de escritorio con bloqueo real
+- Revocación inmediata de token, sin cuentas
 
 ---
 

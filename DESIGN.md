@@ -1,4 +1,4 @@
-# DESIGN.md — sistema visual y de voz de Peaje
+# DESIGN.md — sistema visual y de voz de Pings
 
 > Hermano de `CONTRACT.md`. Ese manda sobre los datos; este manda sobre lo que se ve y lo que se
 > lee. Si un cambio visual lo contradice, **para y avisa**.
@@ -69,7 +69,7 @@ trabajo a cada uno.
 | Token | Hex | Único trabajo |
 |---|---|---|
 | `--calm` | `#2fbf71` | nadie te espera |
-| `--warn` | `#ffd23f` | atención · la marca · el peaje |
+| `--warn` | `#ffd23f` | atención · la marca · el pings |
 | `--red` | `#ff4d4d` | alguien está bloqueado |
 
 Un color = un significado. Si un elemento es amarillo, es porque reclama atención. Si hace falta un
@@ -146,7 +146,7 @@ decorativas (`style.css:752-761` ya lo hace bien; la landing tenía el bloque fa
 ## 4. Composición
 
 - **Alineación a la izquierda.** El texto de cuerpo nunca va centrado. Solo el número gigante de la
-  vista de peaje se centra, porque ahí es el único objeto en pantalla.
+  vista de deuda alta se centra, porque ahí es el único objeto en pantalla.
 - **Asimetría deliberada.** El hero no está centrado: el tipo va a la izquierda del grid, el objeto
   focal desplazado. La simetría perfecta es lo que hace que una página se lea como plantilla.
 - **Secciones de largo desigual.** Una sección de tres frases al lado de una de diez está bien y es
@@ -173,7 +173,7 @@ credibilidad de una herramienta para devs.
 - ❌ **Texto con gradiente** (`background-clip: text`). Nunca.
 - ❌ **Glassmorphism.** `backdrop-filter: blur()` + `rgba(255,255,255,.1)` + borde blanco de 1px.
 - ❌ **Glow y sombras de neón.** `box-shadow: 0 0 40px rgba(...)`. Única excepción: el
-  `text-shadow` del número en la vista de peaje, que ya existe y significa algo.
+  `text-shadow` del número en la vista de deuda alta, que ya existe y significa algo.
 - ❌ **Emoji como iconos** en tarjetas de feature (🚀 ⚡ 🔒 ✨). Los `⚠` y `✓` semánticos sí.
 - ❌ **Tres tarjetas simétricas en fila** con icono arriba, título de tres palabras y descripción de
   dos líneas del mismo largo.
@@ -183,7 +183,7 @@ credibilidad de una herramienta para devs.
 - ❌ **Badge de píldora sobre el titular** del tipo `✨ Nuevo`.
 - ❌ **Scroll-reveal uniforme:** cada sección apareciendo con el mismo fade-up de 0.5 s.
 - ❌ **Nav flotante en forma de píldora.** Se volvió el elemento más copiado de las landings
-  generadas. La barra de Peaje va a ras del grid.
+  generadas. La barra de Pings va a ras del grid.
 - ❌ **`hover: scale(1.05)` + sombra** en cada tarjeta.
 - ❌ **Slate-900 con acento índigo** (`#0f172a` + `#6366f1`): el dark mode por defecto de Tailwind.
 - ❌ **Fila de logos "Confían en nosotros".** No hay clientes. Inventarlos es mentir.
@@ -245,12 +245,12 @@ los ajustes sin login. Eso es lo que hace que esto no cueste backend.
 
 | Ajuste | localStorage | Param | Dónde se aplica |
 |---|---|---|---|
-| Nombre | `peaje_who` | `&who=` | `/api/hooks.json`, en la URL de cada hook |
-| Tarifa $/h | `peaje_rate` | `&rate=` | `server/index.js`, sobreescribe `snap.cost` |
-| Mostrar dinero | `peaje_money` | `&money=0` | idem |
-| Sensibilidad | `peaje_sens` | `&sens=relax\|normal\|strict` | idem, recalcula `snap.level` |
-| Carita on/off | `peaje_face` | `&face=0` | `settings.js` → `body[data-face="0"]` |
-| Voz | `peaje_mute` | `&voice=0` | `settings.js` siembra la clave |
+| Nombre | `pings_who` | `&who=` | `/api/hooks.json`, en la URL de cada hook |
+| Tarifa $/h | `pings_rate` | `&rate=` | `server/index.js`, sobreescribe `snap.cost` |
+| Mostrar dinero | `pings_money` | `&money=0` | idem |
+| Sensibilidad | `pings_sens` | `&sens=relax\|normal\|strict` | idem, recalcula `snap.level` |
+| Carita on/off | `pings_face` | `&face=0` | `settings.js` → `body[data-face="0"]` |
+| Voz | `pings_mute` | `&voice=0` | `settings.js` siembra la clave |
 
 Sensibilidad, en minutos de `nudge`/`angry`/`toll`: `relax` 5/10/20 · `normal` 2/5/10 (el de
 `CONTRACT.md` §1) · `strict` 1/3/5.
@@ -313,7 +313,7 @@ Reglas de construcción, todas por una razón concreta:
 - **Los párpados se recortan contra los ojos, no contra el cuerpo.** Es más correcto que en la bola
   (un párpado es parte del ojo) y además resuelve que un trazo no sirve como `clipPath`, que solo
   entiende geometría rellena.
-- **El puré va centrado en `y≈69`, no pegado al piso del viewBox.** La vista de peaje escala el
+- **El puré va centrado en `y≈69`, no pegado al piso del viewBox.** La vista de deuda alta escala el
   personaje a `min(150vw, 150vh)` centrado: cualquier cosa dibujada abajo se sale de la ventana y
   la cara desaparece. Costó un bug encontrarlo.
 - **Solo se mueve `--ball`.** `--hot` (el número de la deuda) y `--red` (permisos) siguen rojos: el

@@ -1,4 +1,4 @@
-/* Peaje — capa de tokens. La cargan la landing Y el widget.
+/* Pings — capa de tokens. La cargan la landing Y el widget.
    Por qué existe: había dos :root paralelos (index.html y style.css) que ya habían
    divergido (--dim distinto, --hot con semántica distinta). Este archivo es el único
    dueño de los tokens. El razonamiento está en DESIGN.md.
@@ -31,7 +31,7 @@
 
   /* ── Los tres semánticos. Uno = un significado. No hay un cuarto. ───────── */
   --calm: #2fbf71;    /* nadie te espera */
-  --warn: #ffd23f;    /* atención · la marca · el peaje */
+  --warn: #ffd23f;    /* atención · la marca · el pings */
   --red: #ff4d4d;     /* alguien está bloqueado */
 
   /* ── Radios: chicos a propósito. Los radios grandes son el look burbuja. ── */
@@ -136,8 +136,8 @@ body[data-level="toll"]  { --ball: #7a5128; --ball-dark: #3c2410; }
 /* Las manchas están siempre en el DOM: el nivel solo cambia su opacidad, así que
    madurar es una transición y no un salto de markup. */
 .ch-spot { fill: var(--ball-dark); opacity: 0; transition: opacity 700ms ease; }
-.peaje-char[data-level="nudge"] .ch-spot { opacity: .3; }
-.peaje-char[data-level="angry"] .ch-spot { opacity: .85; }
+.pings-char[data-level="nudge"] .ch-spot { opacity: .3; }
+.pings-char[data-level="angry"] .ch-spot { opacity: .85; }
 
 /* Puré. Pasado el umbral ya no hay plátano que salvar, y el cambio de silueta se
    lee de un vistazo incluso a 38 px, que es más de lo que logra cualquier color. */
@@ -145,9 +145,9 @@ body[data-level="toll"]  { --ball: #7a5128; --ball-dark: #3c2410; }
 .ch-mush { opacity: 0; }
 .ch-mush-body { fill: var(--ball); transition: fill 600ms ease; }
 
-.peaje-char[data-level="toll"] .ch-banana { opacity: 0; }
-.peaje-char[data-level="toll"] .ch-mush { opacity: 1; }
+.pings-char[data-level="toll"] .ch-banana { opacity: 0; }
+.pings-char[data-level="toll"] .ch-mush { opacity: 1; }
 /* La cara baja al charco. Un puré no tiene ojos a media altura. */
-.peaje-char[data-level="toll"] .ch-face { transform: translateY(9px) scale(.86); }
+.pings-char[data-level="toll"] .ch-face { transform: translateY(9px) scale(.86); }
 /* Ya está en el suelo: no proyecta sombra aparte. */
-.peaje-char[data-level="toll"] .ch-shadow { opacity: 0; }
+.pings-char[data-level="toll"] .ch-shadow { opacity: 0; }

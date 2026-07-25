@@ -1,17 +1,20 @@
-/* Peaje — configuración. Sin cuentas, sin sesiones, sin base de datos.
+/* Pings — configuración. Sin cuentas, sin sesiones, sin base de datos.
    La verdad vive en localStorage y VIAJA en la query string de la URL del widget.
    Como el QR se genera desde esa misma URL, el celular hereda los ajustes sin login.
    Ese es todo el truco: es lo que hace que la personalización no cueste backend.
 
    Este archivo lo cargan la landing y el widget. En widget.html va en el <head> SIN
-   defer, porque tiene que sembrar peaje_mute antes de que corra el script inline del
+   defer, porque tiene que sembrar pings_mute antes de que corra el script inline del
    body que lo lee (widget.html:96). Consecuencia: cuando esto ejecuta, document.body
    todavía es null. Por eso los atributos van en <html>. */
 
 (function () {
-  var DEFAULTS = { who: '', rate: 60, money: 1, sens: 'normal', face: 1, voice: 1 };
-  var K = { who: 'peaje_who', rate: 'peaje_rate', money: 'peaje_money',
-            sens: 'peaje_sens', face: 'peaje_face', voice: 'peaje_mute' };
+  var DEFAULTS = { who: '', rate: 60, money: 1, sens: 'normal', face: 1, voice: 1, tono: 'seco' };
+  var K = { who: 'pings_who', rate: 'pings_rate', money: 'pings_money',
+            sens: 'pings_sens', face: 'pings_face', voice: 'pings_mute',
+            tono: 'pings_tono' };
+
+  var TONOS = { seco: 1, suelto: 1, charro: 1 };
 
   var SENS = {                       // minutos de nudge / angry / toll
     relax:  [5, 10, 20],
@@ -33,8 +36,12 @@
     s.money = bool(params.get('money'), bool(ls(K.money), DEFAULTS.money));
     s.sens = SENS[params.get('sens')] ? params.get('sens')
            : SENS[ls(K.sens)] ? ls(K.sens) : DEFAULTS.sens;
+    // El default es `seco`: una voz graciosa por defecto clasifica el producto
+    // como juguete en veinte segundos. Los otros dos son opt-in explícito.
+    s.tono = TONOS[params.get('tono')] ? params.get('tono')
+           : TONOS[ls(K.tono)] ? ls(K.tono) : DEFAULTS.tono;
     s.face = bool(params.get('face'), bool(ls(K.face), DEFAULTS.face));
-    // peaje_mute guarda lo contrario de voice: '1' = muteado.
+    // pings_mute guarda lo contrario de voice: '1' = muteado.
     s.voice = params.has('voice') ? bool(params.get('voice'), 1)
             : (ls(K.voice) === '1' ? 0 : 1);
     return s;
@@ -72,6 +79,7 @@
     out.push('rate=' + s.rate);
     out.push('money=' + (s.money ? '1' : '0'));
     out.push('sens=' + s.sens);
+    out.push('tono=' + s.tono);
     out.push('face=' + (s.face ? '1' : '0'));
     if (!s.voice) out.push('voice=0');
     return out.join('&');
@@ -89,7 +97,7 @@
   // pelearle al botón que ya existe.
   if (params.has('voice')) setLs(K.voice, S.voice ? '0' : '1');
 
-  window.PEAJE = { read: read, save: save, query: query, DEFAULTS: DEFAULTS, SENS: SENS };
+  window.PINGS = { read: read, save: save, query: query, DEFAULTS: DEFAULTS, SENS: SENS };
 
   // ── Acumulado del día, solo en el widget ───────────────────────────────────
   // Va por fetch a /api/state cada 10 s en vez de por el SSE. Desacoplado a

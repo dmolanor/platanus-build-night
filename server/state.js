@@ -9,7 +9,7 @@ const TOKEN_TTL_MS = 12 * 60 * 60 * 1000;
 
 // Sin eventos en NINGUNA sesión por este tiempo, no estás distraído: estás fuera
 // (almuerzo, casa, dormido). La deuda se CONGELA —no se borra— y nos callamos.
-// Nadie a quien intervenir en una silla vacía. El peaje te cobra al volver.
+// Nadie a quien intervenir en una silla vacía. El pings te cobra al volver.
 const AWAY_MS = 30 * 60 * 1000;
 
 // Mucho más tarde: la sesión está abandonada de verdad (terminal cerrada, máquina
@@ -57,7 +57,7 @@ export function isAway(token, now = Date.now()) {
   return t ? now - (t.lastHumanAt || 0) > AWAY_MS : false;
 }
 
-// Registro de lo que Peaje decidió solo. Se muestra al volver: sin auditoría,
+// Registro de lo que Pings decidió solo. Se muestra al volver: sin auditoría,
 // decidir por alguien es abuso.
 export function logAuto(token, entry) {
   const t = TOKENS.get(token);
@@ -307,7 +307,7 @@ export function snapshot(token) {
     return {
       totalWaitedMs: 0, level: 'calm', agentesParados: 0, clock: 1, presence: 'here',
       autopilot: false, auto: [],
-      cost: { idleUsd: 0, rateUsdHour: Number(process.env.PEAJE_DEV_RATE_USD || 60), loopSessions: 0 },
+      cost: { idleUsd: 0, rateUsdHour: Number(process.env.PINGS_DEV_RATE_USD || 60), loopSessions: 0 },
       sessions: [], permits: [], speak: null,
     };
   }
@@ -365,7 +365,7 @@ export function snapshot(token) {
   //    capacidad paralela: costo de oportunidad, con el supuesto de tarifa a la vista.
   //  - Dar vueltas en loop SÍ quema tokens de verdad. Eso es plata literal.
   // Decir "X dólares de cómputo parado" sería falso y se cae con una pregunta.
-  const rateUsdHour = Number(process.env.PEAJE_DEV_RATE_USD || 60);
+  const rateUsdHour = Number(process.env.PINGS_DEV_RATE_USD || 60);
   const idleCostUsd = (total / 3_600_000) * rateUsdHour;
   const loopSessions = sessions.filter((s) => s.loopCount >= 1).length;
 
@@ -471,7 +471,7 @@ export function resetDebt(token) {
 }
 
 // `ramp`: arranca la deuda en cero para que el contador SUBA en vivo y se vea la
-// escalada calm → nudge → angry → toll. Sin esto la demo aparece ya en peaje y se
+// escalada calm → nudge → angry → toll. Sin esto la demo aparece ya en pings y se
 // salta el arco entero, que es justo el beat del pitch ("12... 30... 47").
 export function startDemo(token, speed, ramp = false) {
   const t = getToken(token);
@@ -507,7 +507,7 @@ export function startDemo(token, speed, ramp = false) {
       recentTools: [], touched: new Map(d.touched || []), lastEventAt: now,
     });
   }
-  // El registro de lo que se aprobó solo: es la prueba de que Peaje trabajó
+  // El registro de lo que se aprobó solo: es la prueba de que Pings trabajó
   // mientras no estabas, y sin auditoría decidir por alguien sería abuso.
   t.autoLog = [
     { at: now - 40_000, sessionId: 'demo-auth', who: 'diego', repo: 'buk-api',

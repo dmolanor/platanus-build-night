@@ -1,7 +1,7 @@
 // Piloto automático: aprobar lo rutinario mientras el humano no está, para que
 // sus agentes no se detengan.
 //
-// Es lo ÚNICO en todo Peaje que ejecuta algo en la máquina de alguien sin que
+// Es lo ÚNICO en todo Pings que ejecuta algo en la máquina de alguien sin que
 // mire. Por eso aquí no hay modelo, no hay heurística difusa y no hay beneficio
 // de la duda: una lista blanca cerrada, y todo lo que no esté en ella espera.
 //

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Peaje</title>
+<title>Pings</title>
 <link rel="icon" href="data:,">
 <link rel="stylesheet" href="./style.css">
 <link rel="stylesheet" href="./theme.css">
@@ -39,7 +39,7 @@
   <div id="bubble" class="bubble" hidden></div>
   <ul id="sessions" class="sessions"></ul>
   <p id="empty" class="empty" hidden>Nadie te está esperando. Estás al día.</p>
-  <!-- Lo que Peaje aprobó solo mientras no estabas. Sin este registro, decidir
+  <!-- Lo que Pings aprobó solo mientras no estabas. Sin este registro, decidir
        por alguien sería abuso: aquí se rinde cuentas. -->
   <section id="auto" class="auto" hidden>
     <div class="auto-head">Decidí por ti mientras no estabas</div>
@@ -66,7 +66,7 @@
   </div>
 </section>
 
-<!-- Brief al salir del peaje -->
+<!-- Brief: a dónde volver -->
 <section id="view-brief" class="view">
   <div class="brief-tag">Brief de vuelta</div>
   <div id="brief-head" class="brief-head">Cargando…</div>
@@ -84,7 +84,7 @@ import { mount, setLevel } from './character.js';
 
 const TOKEN = new URLSearchParams(location.search).get('token') || '';
 const QT = encodeURIComponent(TOKEN);
-const TOLL_GRACE_MS = 30_000;    // tras pagar, no vuelvas a caer al peaje enseguida
+const TOLL_GRACE_MS = 30_000;    // tras verlo, no vuelvas a caer en deuda alta enseguida
 
 const $ = (id) => document.getElementById(id);
 
@@ -102,7 +102,7 @@ const S = {
   tollGraceUntil: 0,
   paying: false,
   offline: true,
-  muted: localStorage.getItem('peaje_mute') === '1',
+  muted: localStorage.getItem('pings_mute') === '1',
   spoken: new Set(),
   audio: null,            // el <audio> de ElevenLabs sonando ahora, para poder cortarlo
   deadlines: new Map(),   // permitId -> timestamp absoluto de expiración
@@ -235,7 +235,7 @@ function paintMute() {
 }
 $('mute').addEventListener('click', () => {
   S.muted = !S.muted;
-  localStorage.setItem('peaje_mute', S.muted ? '1' : '0');
+  localStorage.setItem('pings_mute', S.muted ? '1' : '0');
   if (S.muted) {
     try { synth && synth.cancel(); } catch (_) {}
     try { S.audio && S.audio.pause(); S.audio = null; } catch (_) {}
@@ -409,7 +409,7 @@ function activePermits() {
 function renderPermits() {
   const list = activePermits();
   const inToll = S.view === 'toll';
-  // En el peaje la salida es decidir EL PRIMERO: no ofrecemos alternativas.
+  // En el pings la salida es decidir EL PRIMERO: no ofrecemos alternativas.
   const shown = inToll ? list.slice(0, 1) : list;
 
   const more = $('toll-more');
@@ -599,7 +599,7 @@ function setView(view) {
   renderPermits();
 }
 
-// ── VISTA C · peaje ─────────────────────────────────────────────────────────
+// ── VISTA C · pings ─────────────────────────────────────────────────────────
 function enterToll() {
   setView('toll');
   announce(Math.round(S.totalWaitedMs / 60000) + ' agent-minutos parados. Te digo a cuál volver.');
@@ -734,14 +734,14 @@ function render(snap) {
   renderAuto();
   renderPermits();
 
-  // Entrada y salida del peaje.
-  // Estando fuera no se cobra peaje: no hay nadie a quien bloquear. La deuda queda
-  // congelada y el peaje salta en cuanto vuelves, que es cuando sirve.
+  // Entrada y salida de la vista de deuda alta.
+  // Estando fuera no se avisa: no hay nadie a quien avisarle. La deuda queda
+  // congelada y el pings salta en cuanto vuelves, que es cuando sirve.
   if (S.level === 'toll' && S.view === 'normal' && !S.paying && now >= S.tollGraceUntil
       && S.presence !== 'away') {
     enterToll();
   } else if (S.level !== 'toll' && S.view === 'toll') {
-    setView('normal');   // la deuda desapareció por otro lado: el peaje ya no aplica
+    setView('normal');   // la deuda desapareció por otro lado: el pings ya no aplica
   }
   renderTollLock();
 
@@ -758,7 +758,32 @@ function setOffline(v) {
   $('conn').title = v ? 'sin conexión — reconectando' : 'conectado';
 }
 
-const es = new EventSource(`/events${location.search}`);   // reenvía token + ajustes
+let es = new EventSource(`/events${location.search}`);   // reenvía token + ajustes
+
+// Los ajustes viven en localStorage y viajan en la query, así que una ventana ya
+// abierta se quedaba con los viejos hasta cerrarla. El iframe de la PiP es del
+// mismo origen, así que sí recibe `storage` cuando la landing escribe: se
+// reconstruye la query desde ahí y se reconecta el stream. Sin recargar nada.
+addEventListener('storage', (e) => {
+  if (!e.key || !e.key.startsWith('pings_')) return;
+  if (typeof PINGS === 'undefined' || !PINGS.query) return;
+  const nueva = `/events?${PINGS.query(TOKEN)}`;
+  if (nueva === es.url.replace(location.origin, '')) return;
+  try { es.close(); } catch (_) {}
+  history.replaceState(null, '', `/widget.html?${PINGS.query(TOKEN)}`);
+  S.spoken.clear();                 // otro tono es otro texto: hay que poder decirlo
+  es = conectar(nueva);
+});
+
+function conectar(url) {
+  const src = new EventSource(url);
+  src.addEventListener('open', () => setOffline(false));
+  src.addEventListener('error', () => setOffline(true));
+  src.addEventListener('message', (e) => {
+    try { render(JSON.parse(e.data)); } catch (_) {}
+  });
+  return src;
+}
 es.addEventListener('open', () => setOffline(false));
 es.addEventListener('error', () => setOffline(true));   // EventSource reconecta solo
 es.addEventListener('message', (e) => {

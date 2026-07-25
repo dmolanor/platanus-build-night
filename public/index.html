@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Peaje — en cuál de tus agentes estás perdiendo más tiempo</title>
+<title>Pings — en cuál de tus agentes estás perdiendo más tiempo</title>
 <meta name="description" content="Mide cuánto llevan tus agentes de Claude Code esperándote a ti, te dice a cuál volver, y te deja destrabar un permiso desde el celular sin volver a la terminal.">
 <link rel="icon" href="data:,">
 <link rel="stylesheet" href="./theme.css">
@@ -239,7 +239,7 @@
 
 <header class="bar">
   <div class="bar-in">
-    <span class="mark">Peaje</span>
+    <span class="mark">Pings</span>
     <span class="mark-sub">latencia humana, medida</span>
     <span class="bar-end">
       <code class="tok" id="tok">…</code>
@@ -263,7 +263,7 @@
     </div>
 
     <div class="stage">
-      <div class="stage-frame"><iframe id="preview" title="El widget de Peaje, corriendo"></iframe></div>
+      <div class="stage-frame"><iframe id="preview" title="El widget de Pings, corriendo"></iframe></div>
       <p class="stage-cap"><span class="live"></span> No es una maqueta. Es el widget, con datos de demo.</p>
     </div>
   </div>
@@ -332,7 +332,7 @@ ranking      = costo × peso(motivo) × (1 + loops)
         handler responda <code class="tok">allow</code> o <code class="tok">deny</code> en tu nombre.
         Puedes decidir sin volver a la terminal, con una recomendación del modelo sobre qué hace ese
         comando y por qué.</p>
-      <pre class="mono">Claude Code  ──PermissionRequest (HTTP)──▶  Peaje  ──SSE──▶  widget / celular
+      <pre class="mono">Claude Code  ──PermissionRequest (HTTP)──▶  Pings  ──SSE──▶  widget / celular
      ▲                                        │
      └──────────── <b>allow</b> | <b>deny</b> ─────────────┘</pre>
       <p class="soft">No hay relay local, ni <code class="tok">npx</code>, ni instalador. Claude Code
@@ -343,7 +343,7 @@ ranking      = costo × peso(motivo) × (1 + loops)
   <section>
     <div class="sec-n"><b>05</b> La garantía</div>
     <div>
-      <h2>Peaje nunca cuelga un agente.</h2>
+      <h2>Pings nunca cuelga un agente.</h2>
       <p class="soft">Si nadie decide en <strong>85 segundos</strong>, el servidor responde vacío y
         Claude Code muestra el prompt normal en tu terminal. Un timeout de hook es un error no
         bloqueante: en el peor caso quedas exactamente como estabas antes de instalar esto.</p>
@@ -396,13 +396,29 @@ ranking      = costo × peso(motivo) × (1 + loops)
         <div class="set-row">
           <div>
             <h3>Cuán rápido te molesta</h3>
-            <p>Los umbrales de aviso y de peaje, en minutos de deuda acumulada.</p>
+            <p>Los umbrales de aviso y de pings, en minutos de deuda acumulada.</p>
           </div>
           <div class="set-ctl">
             <div class="seg" id="s-sens">
               <button type="button" data-v="relax" aria-pressed="false">relajado</button>
               <button type="button" data-v="normal" aria-pressed="true">normal</button>
               <button type="button" data-v="strict" aria-pressed="false">estricto</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="set-row">
+          <div>
+            <h3>Cómo te lo dice</h3>
+            <p><strong>Seco</strong> es el default y es lo que se muestra en serio: el número y nada
+              más. <strong>Suelto</strong> tiene ironía. <strong>Charro</strong> te reclama en
+              colombiano. El dato es el mismo en los tres; cambia quién te lo dice.</p>
+          </div>
+          <div class="set-ctl">
+            <div class="seg" id="s-tono">
+              <button type="button" data-v="seco" aria-pressed="true">seco</button>
+              <button type="button" data-v="suelto" aria-pressed="false">suelto</button>
+              <button type="button" data-v="charro" aria-pressed="false">charro</button>
             </div>
           </div>
         </div>
@@ -482,7 +498,7 @@ ranking      = costo × peso(motivo) × (1 + loops)
     <div>
       <h2>Decir esto en voz alta sale más barato que descubrirlo instalando.</h2>
       <ul class="plain">
-        <li><strong>No te bloquea la máquina.</strong> El peaje toma la ventana del widget y nada más.
+        <li><strong>No te bloquea la máquina.</strong> El pings toma la ventana del widget y nada más.
           Tu terminal sigue intacta y puedes cerrarlo. Esta versión apuesta a que ver el número basta.</li>
         <li><strong>No minimiza los datos que recibe.</strong> El hook manda el payload nativo
           completo y no hay cliente local que lo filtre: en un <code class="tok">Write</code> eso
@@ -517,19 +533,19 @@ ranking      = costo × peso(motivo) × (1 + loops)
 
 <script>
 const $ = (s) => document.querySelector(s);
-let token = new URLSearchParams(location.search).get('token') || localStorage.getItem('peaje_token');
+let token = new URLSearchParams(location.search).get('token') || localStorage.getItem('pings_token');
 
 // El hero corre contra un token propio, no contra el tuyo: sembrarle sesiones de demo
 // a tu cola real sería mentirte. Es un token de verdad, acuñado con CSPRNG como
 // cualquier otro — un string fijo tipo "demo-landing" es exactamente lo que el
 // guardia de formato de state.js:34 existe para rechazar.
 // Va en sessionStorage y no en localStorage: la demo dura lo que dure la pestaña.
-let PREVIEW = sessionStorage.getItem('peaje_preview') || null;
+let PREVIEW = sessionStorage.getItem('pings_preview') || null;
 
 async function ensurePreview() {
   if (!PREVIEW) {
     PREVIEW = (await (await fetch('/api/token/new')).json()).token;
-    sessionStorage.setItem('peaje_preview', PREVIEW);
+    sessionStorage.setItem('pings_preview', PREVIEW);
   }
   return PREVIEW;
 }
@@ -537,7 +553,7 @@ async function ensurePreview() {
 // ── Token, QR y bloque de hooks ────────────────────────────────────────────
 async function ensureToken() {
   if (!token) token = (await (await fetch('/api/token/new')).json()).token;
-  localStorage.setItem('peaje_token', token);
+  localStorage.setItem('pings_token', token);
   $('#tok').textContent = token;
   $('#tok2').textContent = token;
   pintarQR();
@@ -550,31 +566,34 @@ async function pintarBloque() {
   $('#bloque').textContent = JSON.stringify(await r.json(), null, 2);
 }
 
-function pintarQR() { if (token) $('#qr').src = `/api/qr.svg?${PEAJE.query(token)}`; }
+function pintarQR() { if (token) $('#qr').src = `/api/qr.svg?${PINGS.query(token)}`; }
 
 // ── Ajustes ────────────────────────────────────────────────────────────────
 // El iframe se recarga con debounce: cada recarga reinicia el SSE, así que no conviene
 // hacerlo en cada tecla del campo de tarifa.
 let t = null;
 function aplicar(recargar) {
-  const s = PEAJE.read();
+  const s = PINGS.read();
   $('#s-money').setAttribute('aria-pressed', s.money ? 'true' : 'false');
   $('#s-face').setAttribute('aria-pressed', s.face ? 'true' : 'false');
   $('#s-voice').setAttribute('aria-pressed', s.voice ? 'true' : 'false');
   for (const b of document.querySelectorAll('#s-sens button')) {
     b.setAttribute('aria-pressed', b.dataset.v === s.sens ? 'true' : 'false');
   }
+  for (const b of document.querySelectorAll('#s-tono button')) {
+    b.setAttribute('aria-pressed', b.dataset.v === s.tono ? 'true' : 'false');
+  }
   $('#hoy-rate').textContent = '$' + s.rate;
   pintarQR();
   pintarHoy();
   if (!recargar || !PREVIEW) return;
   clearTimeout(t);
-  t = setTimeout(() => { $('#preview').src = `/widget.html?${PEAJE.query(PREVIEW)}`; }, 450);
+  t = setTimeout(() => { $('#preview').src = `/widget.html?${PINGS.query(PREVIEW)}`; }, 450);
 }
 
 function toggle(id, key) {
   $(id).onclick = () => {
-    PEAJE.save({ [key]: PEAJE.read()[key] ? 0 : 1 });
+    PINGS.save({ [key]: PINGS.read()[key] ? 0 : 1 });
     aplicar(true);
   };
 }
@@ -583,20 +602,24 @@ toggle('#s-face', 'face');
 toggle('#s-voice', 'voice');
 
 for (const b of document.querySelectorAll('#s-sens button')) {
-  b.onclick = () => { PEAJE.save({ sens: b.dataset.v }); aplicar(true); };
+  b.onclick = () => { PINGS.save({ sens: b.dataset.v }); aplicar(true); };
+}
+
+for (const b of document.querySelectorAll('#s-tono button')) {
+  b.onclick = () => { PINGS.save({ tono: b.dataset.v }); aplicar(true); };
 }
 
 $('#s-rate').oninput = () => {
   const v = Number($('#s-rate').value);
-  if (v > 0) { PEAJE.save({ rate: v }); aplicar(true); }
+  if (v > 0) { PINGS.save({ rate: v }); aplicar(true); }
 };
 
-$('#s-who').oninput = () => { PEAJE.save({ who: $('#s-who').value }); pintarBloque(); };
+$('#s-who').oninput = () => { PINGS.save({ who: $('#s-who').value }); pintarBloque(); };
 
 // ── Botones ────────────────────────────────────────────────────────────────
 $('#nuevo').onclick = async () => {
   token = null;
-  localStorage.removeItem('peaje_token');
+  localStorage.removeItem('pings_token');
   await ensureToken();
 };
 
@@ -610,15 +633,15 @@ $('#copiar').onclick = async () => {
 $('#demo').onclick = async () => {
   await ensurePreview();
   await fetch(`/api/demo/start?token=${encodeURIComponent(PREVIEW)}&ramp=1`, { method: 'POST' });
-  $('#preview').src = `/widget.html?${PEAJE.query(PREVIEW)}`;
+  $('#preview').src = `/widget.html?${PINGS.query(PREVIEW)}`;
 };
 
 // Document PiP exige un gesto del usuario. Este clic ES ese gesto, y de paso habilita la
 // voz, que el navegador bloquea hasta que haya interacción.
 $('#abrir').onclick = async () => {
-  const url = `/widget.html?${PEAJE.query(token)}`;
+  const url = `/widget.html?${PINGS.query(token)}`;
   if (!('documentPictureInPicture' in window)) {
-    window.open(url, 'peaje', 'width=380,height=280');
+    window.open(url, 'pings', 'width=380,height=280');
     return;
   }
   const pip = await documentPictureInPicture.requestWindow({ width: 380, height: 280 });
@@ -631,10 +654,10 @@ $('#abrir').onclick = async () => {
 
 // ── Hero en vivo ───────────────────────────────────────────────────────────
 // El estado sembrado son 6 agentes acumulando sobre 5,6 min de deuda, así que sube ~6
-// agent-minutos por minuto real. Medido: llega a peaje (rojo, pantalla completa) a los
+// agent-minutos por minuto real. Medido: llega a pings (rojo, pantalla completa) a los
 // 45 s clavados. Re-sembramos a los 30 para tener margen y que el hero se quede en la
 // banda donde se ve la lista, que es lo que la landing está explicando al lado.
-// Con sensibilidad "estricto" sí entra al peaje, y está bien: eso es lo que hace estricto.
+// Con sensibilidad "estricto" sí entra en deuda alta, y está bien: eso es lo que hace estricto.
 async function sembrar() {
   try {
     await ensurePreview();
@@ -645,7 +668,7 @@ async function sembrar() {
 async function pintarHoy() {
   if (!PREVIEW) return;
   try {
-    const s = PEAJE.read();
+    const s = PINGS.read();
     const r = await fetch(`/api/state?token=${encodeURIComponent(PREVIEW)}&rate=${s.rate}`);
     const ms = (await r.json()).cost?.perdidoHoyMs || 0;
     $('#hoy-min').textContent = ms < 30000 ? '0' : String(Math.round(ms / 60000));
@@ -654,13 +677,13 @@ async function pintarHoy() {
 }
 
 // ── Arranque ───────────────────────────────────────────────────────────────
-const s0 = PEAJE.read();
+const s0 = PINGS.read();
 $('#s-who').value = s0.who;
 $('#s-rate').value = s0.rate;
 aplicar(false);
 ensureToken();
 sembrar().then(() => {
-  $('#preview').src = `/widget.html?${PEAJE.query(PREVIEW)}`;
+  $('#preview').src = `/widget.html?${PINGS.query(PREVIEW)}`;
   pintarHoy();
 });
 setInterval(sembrar, 30000);

@@ -1,4 +1,4 @@
-# Peaje — reglas del proyecto
+# Pings — reglas del proyecto
 
 Hackathon, 8 horas, un solo entregable desplegado. **Este código vive 8 horas.**
 

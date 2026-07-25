@@ -1,9 +1,9 @@
 {
-  "name": "peaje",
+  "name": "pings",
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Tu eres el rate limiter. Peaje mide la deuda que le debes a tus agentes y te deja saldarla.",
+  "description": "Tu eres el rate limiter. Pings mide la deuda que le debes a tus agentes y te deja saldarla.",
   "engines": {
     "node": ">=20"
   },

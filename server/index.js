@@ -10,6 +10,7 @@ import {
   isAway, autopilotOn, setAutopilot, logAuto, markHuman,
 } from './state.js';
 import { decidir } from './autopilot.js';
+import { frase, TONOS } from './tono.js';
 import * as permits from './permits.js';
 import { aiBrief, aiAdvice, lastAiError, fallbackBrief } from './ai.js';
 
@@ -89,7 +90,7 @@ app.post('/hook', (req, res) => {
     });
   }
 
-  // Regla de retención (CONTRACT.md §3): si estás en el teclado, Peaje no te estorba.
+  // Regla de retención (CONTRACT.md §3): si estás en el teclado, Pings no te estorba.
   if (snap.totalWaitedMs < NUDGE_MS) return res.status(200).end();
 
   // La recomendación llega después y se adjunta al permiso cuando esté lista.
@@ -136,6 +137,14 @@ function acumular(token, snap) {
 // el widget para pintar el acumulado, y CONTRACT.md §5 lo declara para debug): un GET no
 // debería mover el contador. Los dos comparten el mismo Map, así que el widget lee ahí
 // lo que su propio SSE viene acumulando.
+// Rota entre variantes para que cruzar el mismo umbral dos veces no diga lo mismo.
+const rotaciones = new Map();
+function rotacion(token) {
+  const n = (rotaciones.get(token) || 0);
+  rotaciones.set(token, n + 1);
+  return n;
+}
+
 function personalizar(req, token, snap, acumula) {
   const q = req.query;
 
@@ -159,8 +168,18 @@ function personalizar(req, token, snap, acumula) {
       : 0;
   }
 
+  // Tono de la voz. Se reescribe DESPUÉS de que speakFor() ya decidió que hay algo
+  // nuevo que decir, así que la lógica de "una sola vez por nivel" no se toca:
+  // acá solo cambia el registro del mismo mensaje.
+  const tono = TONOS.includes(q.tono) ? q.tono : 'seco';
+  if (tono !== 'seco' && typeof snap.speak === 'string' && snap.speak) {
+    const min = Math.round(snap.totalWaitedMs / 60000);
+    const alt = frase(tono, snap.level, snap.agentesParados, min, rotacion(token));
+    if (alt) snap.speak = alt;
+  }
+
   // Sensibilidad. El widget deriva TODO de snap.level (colores de la bola, vista de
-  // peaje, voz), así que recalcularlo acá alcanza y levelFor() no se toca. En 'normal'
+  // pings, voz), así que recalcularlo acá alcanza y levelFor() no se toca. En 'normal'
   // no entramos nunca: el comportamiento por defecto queda idéntico al de hoy.
   const sens = SENS_MIN[q.sens] ? q.sens : 'normal';
   if (sens !== 'normal') {
@@ -244,13 +263,13 @@ app.post('/api/toll/complete', (req, res) => {
 });
 
 // ?ramp=1 arranca la deuda en cero para que el contador suba en vivo y se vea la
-// escalada completa. Es el beat del pitch; sin esto la demo aparece ya en peaje.
+// escalada completa. Es el beat del pitch; sin esto la demo aparece ya en pings.
 app.post('/api/demo/start', (req, res) => {
   const ramp = req.query.ramp === '1';
   // Calibrado con el estado sembrado (6 agentes acumulando): a velocidad 2 la deuda
-  // sube ~0.2 agent-min por segundo real → nudge ~10s, angry ~25s, peaje ~50s.
+  // sube ~0.2 agent-min por segundo real → nudge ~10s, angry ~25s, pings ~50s.
   // Ese es el arco del pitch. Velocidades altas lo saltan entero.
-  const speed = Number(req.query.speed || (ramp ? 2 : process.env.PEAJE_DEMO_SPEED || 60));
+  const speed = Number(req.query.speed || (ramp ? 2 : process.env.PINGS_DEMO_SPEED || 60));
   if (!startDemo(tokenOf(req), speed, ramp)) return res.status(404).json({ ok: false });
   res.json({ ok: true, speed, ramp });
 });
@@ -310,7 +329,7 @@ app.get('/api/hooks.json', (req, res) => {
               type: 'http',
               url: url(),
               timeout: 90,
-              statusMessage: 'Peaje: esperando tu decisión desde el widget…',
+              statusMessage: 'Pings: esperando tu decisión desde el widget…',
             },
           ],
         },
@@ -462,4 +481,4 @@ app.use((err, req, res, _next) => {
   res.status(200).json({ ok: false });
 });
 
-app.listen(PORT, () => console.log(`peaje escuchando en :${PORT}`));
+app.listen(PORT, () => console.log(`pings escuchando en :${PORT}`));

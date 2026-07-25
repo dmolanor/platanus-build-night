@@ -1,4 +1,4 @@
-# CONTRACT.md — fuente de verdad de Peaje
+# CONTRACT.md — fuente de verdad de Pings
 
 > Congelado en la hora 0. Si un cambio contradice este archivo, **para y avisa**.
 > Todo agente que trabaje en una hoja recibe este archivo pegado en su prompt.
@@ -121,7 +121,7 @@ Si retiene y el humano decide desde el widget, responde `200` con:
 | `GET` | `/events?token=` | SSE, 1 msg/s |
 | `POST` | `/api/permit/:id?token=` | `{ "decision": "allow" \| "deny" }` → resuelve un permiso retenido. **El token es obligatorio**: sin él, 404 |
 | `GET` | `/api/brief?token=` | Ranking + porqués. Con fallback determinista |
-| `POST` | `/api/toll/complete?token=` | Peaje pagado, resetea la deuda |
+| `POST` | `/api/toll/complete?token=` | Pings pagado, resetea la deuda |
 | `POST` | `/api/demo/start?token=` | Estado sembrado + reloj acelerado |
 | `GET` | `/api/state?token=` | Volcado crudo del estado (debug y verificación) |
 | `GET` | `/api/token/new` | Token nuevo |
