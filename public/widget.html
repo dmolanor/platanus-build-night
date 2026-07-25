@@ -467,6 +467,7 @@ function buildSession() {
 
   function update(s) {
     root.dataset.status = s.status || 'working';
+    root.dataset.reason = s.reason || '';   // theme.css colorea la fila por estado
     root.dataset.loop = Number(s.loopCount) >= 1 ? '1' : '0';
 
     rank.textContent = s.rank ? String(s.rank) : '';
