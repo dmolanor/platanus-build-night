@@ -404,14 +404,17 @@ function buildSession() {
   const rank = el('span', 'rank');
 
   const main = el('div', 'sess-main');
+  // El titular es CÓMO SE LLAMA la sesión, no el repo: con dos conversaciones en
+  // el mismo repo, el repo no distingue nada. El repo baja a subtítulo.
   const head = el('div', 'sess-head');
+  const where = el('div', 'sess-where');
   const repo = el('span', 'sess-repo');
   const who = el('span', 'sess-who');
-  head.append(repo, who);
+  where.append(repo, who);
   const why = el('div', 'sess-why');
   const action = el('div', 'sess-action');
   const msg = el('div', 'sess-msg');
-  main.append(head, why, action, msg);
+  main.append(head, where, why, action, msg);
 
   const cost = el('div', 'sess-cost');
   const costN = el('b');
@@ -427,8 +430,10 @@ function buildSession() {
     rank.textContent = s.rank ? String(s.rank) : '';
     rank.hidden = !s.rank;
 
+    head.textContent = s.label || basename(s.repo);
+    head.title = s.label || '';
     repo.textContent = basename(s.repo);
-    who.textContent = s.who ? '· ' + s.who : '';
+    who.textContent = s.who ? ' · ' + s.who : '';
 
     // El costo es el protagonista de la fila: es la pregunta que el producto responde.
     const ms = Number(s.costMs ?? s.waitedMs) || 0;

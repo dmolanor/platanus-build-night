@@ -1,4 +1,4 @@
-// Estado en memoria, indexado por token. Sin base de datos. TTL 2h.
+// Estado en memoria, indexado por token. Sin base de datos.
 // CONTRACT.md §1 y §4 son la fuente de verdad de umbrales y forma de los mensajes.
 
 import { randomBytes } from 'node:crypto';
@@ -64,6 +64,9 @@ function getSession(t, sessionId, payload, who) {
       tasksDone: 0,
       lastTask: null,
       subagents: 0,
+      title: null,
+      lastPrompt: null,
+      model: null,
       lastEventAt: Date.now(),
     };
     t.sessions.set(sessionId, s);
@@ -159,6 +162,8 @@ export function ingest(token, who, payload, kind) {
       setStatus(s, 'working', null);
       s.loopCount = 0;
       s.recentTools = [];
+      if (payload.session_title) s.title = String(payload.session_title).slice(0, 80);
+      if (payload.model) s.model = payload.model;
       break;
 
     // La señal más limpia de "el humano volvió y está en el teclado".
@@ -167,6 +172,11 @@ export function ingest(token, who, payload, kind) {
     // métrica deja de ser defendible.
     case 'UserPromptSubmit':
       setStatus(s, 'working', null);
+      // Con dos sesiones en el mismo repo, el repo no distingue nada. Lo que de
+      // verdad te dice cuál es cuál es qué le pediste.
+      if (payload.prompt) {
+        s.lastPrompt = String(payload.prompt).replace(/\s+/g, ' ').trim().slice(0, 90);
+      }
       break;
 
     case 'PostToolUse': {
@@ -293,6 +303,11 @@ export function snapshot(token) {
       why: whyFor(s, status),
       action: actionFor(s, status),
       costMs: waitedMs * blockedAgents,
+      // Cómo llamar a esta sesión para que un humano la reconozca. El título de
+      // la conversación si existe; si no, qué le pediste; si no, el id corto.
+      label: s.title || s.lastPrompt || `sesión ${s.sessionId.slice(0, 6)}`,
+      title: s.title || null,
+      lastPrompt: s.lastPrompt || null,
       tasksOpen: s.tasksOpen || 0,
       tasksDone: s.tasksDone || 0,
       lastTask: s.lastTask || null,
@@ -410,15 +425,19 @@ export function startDemo(token, speed, ramp = false) {
   const now = Date.now();
   const seed = [
     { sessionId: 'demo-auth', repo: 'buk-api', who: 'diego', status: 'waiting', reason: 'permission',
+      title: 'Rotación de refresh tokens en auth',
       lastMessage: 'Quiero borrar db/migrations/ para regenerarlas desde cero.', loopCount: 0, subagents: 0, ageS: 40 },
     { sessionId: 'demo-checkout', repo: 'buk-api', who: 'diego', status: 'done', reason: 'completed',
+      title: 'Cupones de descuento en checkout',
       lastMessage: 'Listo. PR #212 abierto, solo falta que lo confirmes.', loopCount: 0, subagents: 0, ageS: 15 },
     // Sofía lleva rato en el mismo archivo que el permiso de abajo va a pedir:
     // así la colisión se ve en la demo sin tener que orquestar dos máquinas.
     { sessionId: 'demo-ui', repo: 'buk-web', who: 'sofía', status: 'waiting', reason: 'needs_input',
+      title: 'Arreglar hidratación del dashboard',
       lastMessage: 'Sigo viendo el mismo error de hidratación. Intento otra vez.', loopCount: 3, subagents: 3, ageS: 70,
       touched: [['buk-api/src/auth/client.ts', now - 6 * 60 * 1000]] },
     { sessionId: 'demo-infra', repo: 'buk-infra', who: 'diego', status: 'working', reason: null,
+      title: 'Migrar los workers a Fly',
       lastMessage: null, loopCount: 0, subagents: 0, ageS: 5 },
   ];
   for (const d of seed) {
@@ -426,6 +445,7 @@ export function startDemo(token, speed, ramp = false) {
       sessionId: d.sessionId, repo: d.repo, who: d.who, status: d.status, reason: d.reason,
       since: now - (ramp ? 0 : d.ageS * 1000), lastMessage: d.lastMessage, loopCount: d.loopCount,
       subagents: d.subagents, tasksOpen: 0, tasksDone: 0, lastTask: null,
+      title: d.title, lastPrompt: null, model: null,
       recentTools: [], touched: new Map(d.touched || []), lastEventAt: now,
     });
   }
