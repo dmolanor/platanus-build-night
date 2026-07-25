@@ -37,6 +37,12 @@
   <div id="bubble" class="bubble" hidden></div>
   <ul id="sessions" class="sessions"></ul>
   <p id="empty" class="empty" hidden>Nadie te está esperando. Estás al día.</p>
+  <!-- Lo que Peaje aprobó solo mientras no estabas. Sin este registro, decidir
+       por alguien sería abuso: aquí se rinde cuentas. -->
+  <section id="auto" class="auto" hidden>
+    <div class="auto-head">Decidí por ti mientras no estabas</div>
+    <ul id="auto-list" class="auto-list"></ul>
+  </section>
 </main>
 
 <!-- C · alerta de deuda alta.
@@ -89,6 +95,7 @@ const S = {
   presence: 'here',
   sessions: [],
   permits: [],
+  auto: [],
   view: 'normal',
   tollGraceUntil: 0,
   paying: false,
@@ -453,6 +460,32 @@ function buildSession() {
   return { el: root, update };
 }
 
+function buildAutoItem() {
+  const root = el('li', 'auto-item');
+  const tick = el('span', 'auto-tick', '✓');
+  const main = el('div');
+  const what = el('div', 'auto-what');
+  const why = el('div', 'auto-why');
+  main.append(what, why);
+  root.append(tick, main);
+
+  function update(a) {
+    what.textContent = `${a.tool} ${a.input || ''}`.trim();
+    why.textContent = `${a.repo || ''} · ${a.razon || ''}`;
+  }
+  return { el: root, update };
+}
+
+// El piloto automático solo aprueba lo de la lista blanca, pero eso no lo exime
+// de rendir cuentas: todo lo que decidió se muestra al volver.
+function renderAuto() {
+  const box = $('auto');
+  const items = S.auto || [];
+  box.hidden = items.length === 0;
+  if (!items.length) { clearList($('auto-list')); return; }
+  syncList($('auto-list'), items, (a) => a.at + ':' + a.sessionId, buildAutoItem);
+}
+
 function renderSessions() {
   // El ranking numera solo lo que TE ESTÁ COSTANDO. Las sesiones trabajando van
   // debajo, sin número: son contexto, no deuda.
@@ -637,6 +670,7 @@ function render(snap) {
   S.agentesParados = Number(snap.agentesParados) || 0;
   S.clock = Number(snap.clock) || 1;
   S.presence = snap.presence === 'away' ? 'away' : 'here';
+  S.auto = Array.isArray(snap.auto) ? snap.auto : [];
   S.cost = snap.cost && typeof snap.cost === 'object' ? snap.cost : null;
 
   const incoming = Array.isArray(snap.permits) ? snap.permits : [];
@@ -655,6 +689,7 @@ function render(snap) {
   applyPermitFlag();
   renderDebt();
   renderSessions();
+  renderAuto();
   renderPermits();
 
   // Entrada y salida del peaje.

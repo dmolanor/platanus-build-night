@@ -764,3 +764,35 @@ body[data-offline="1"] .conn {
   /* las barras de tiempo siguen siendo informativas, solo dejan de animarse */
   .permit-bar > i { transition: none !important; }
 }
+
+/* ── Piloto automático: rendición de cuentas ───────────────────────────────── */
+.auto {
+  margin: 8px clamp(10px, 3vw, 22px) 12px;
+  border: 1px solid #1f4030;
+  background: #0e1a14;
+  border-radius: 10px;
+  padding: 8px 10px;
+}
+.auto[hidden] { display: none; }
+.auto-head {
+  color: #7fe3a6;
+  font-size: clamp(9.5px, 2.6vw, 12px);
+  font-weight: 700;
+  letter-spacing: .03em;
+  margin-bottom: 5px;
+}
+.auto-list { list-style: none; margin: 0; padding: 0; }
+.auto-item {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: 7px;
+  padding: 3px 0;
+  min-width: 0;
+}
+.auto-tick { color: #4ecb7d; font-weight: 800; font-size: clamp(10px, 2.7vw, 12px); }
+.auto-what {
+  font-size: clamp(10px, 2.7vw, 12.5px);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  overflow-wrap: anywhere;
+}
+.auto-why { color: var(--dim); font-size: clamp(9px, 2.4vw, 11px); }

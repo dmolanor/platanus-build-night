@@ -34,11 +34,43 @@ export function newToken() {
 export function getToken(token, { create = true } = {}) {
   let t = TOKENS.get(token);
   if (!t && create) {
-    t = { token, createdAt: Date.now(), lastEventAt: Date.now(), sessions: new Map(), demoSpeed: 1, spoken: new Set() };
+    t = { token, createdAt: Date.now(), lastEventAt: Date.now(), lastHumanAt: Date.now(),
+          sessions: new Map(), demoSpeed: 1, spoken: new Set(), autopilot: false, autoLog: [] };
     TOKENS.set(token, t);
   }
   if (t) t.lastEventAt = Date.now();
   return t;
+}
+
+// El humano dio señales de vida: escribió, o decidió un permiso.
+export function markHuman(tokenOrObj) {
+  const t = typeof tokenOrObj === 'string' ? TOKENS.get(tokenOrObj) : tokenOrObj;
+  if (t) t.lastHumanAt = Date.now();
+}
+
+export function isAway(token, now = Date.now()) {
+  const t = TOKENS.get(token);
+  return t ? now - (t.lastHumanAt || 0) > AWAY_MS : false;
+}
+
+// Registro de lo que Peaje decidió solo. Se muestra al volver: sin auditoría,
+// decidir por alguien es abuso.
+export function logAuto(token, entry) {
+  const t = TOKENS.get(token);
+  if (!t) return;
+  t.autoLog.unshift({ at: Date.now(), ...entry });
+  if (t.autoLog.length > 20) t.autoLog.pop();
+}
+
+export function setAutopilot(token, on) {
+  const t = getToken(token);
+  t.autopilot = Boolean(on);
+  return t.autopilot;
+}
+
+export function autopilotOn(token) {
+  const t = TOKENS.get(token);
+  return Boolean(t && t.autopilot);
 }
 
 export function repoFromCwd(cwd) {
@@ -177,6 +209,7 @@ export function ingest(token, who, payload, kind) {
       if (payload.prompt) {
         s.lastPrompt = String(payload.prompt).replace(/\s+/g, ' ').trim().slice(0, 90);
       }
+      markHuman(t);
       break;
 
     case 'PostToolUse': {
@@ -268,13 +301,16 @@ export function snapshot(token) {
   if (!t) {
     return {
       totalWaitedMs: 0, level: 'calm', agentesParados: 0, clock: 1, presence: 'here',
+      autopilot: false, auto: [],
       cost: { idleUsd: 0, rateUsdHour: Number(process.env.PEAJE_DEV_RATE_USD || 60), loopSessions: 0 },
       sessions: [], permits: [], speak: null,
     };
   }
 
-  // ¿Hay alguien en el teclado? Cualquier evento en cualquier sesión cuenta.
-  const lastActivity = t.lastEventAt || 0;
+  // ¿Hay alguien en el teclado? Solo cuentan los eventos que produce el HUMANO:
+  // escribir un prompt o decidir un permiso. `PostToolUse` lo dispara el agente
+  // trabajando — si te fuiste a almorzar y un agente sigue corriendo, tú no estás.
+  const lastActivity = t.lastHumanAt || 0;
   const away = now - lastActivity > AWAY_MS;
   // Estando fuera, el reloj se detiene donde estaba: la deuda queda congelada
   // esperándote, en vez de crecer toda la noche o borrarse.
@@ -338,6 +374,8 @@ export function snapshot(token) {
     agentesParados,
     presence: away ? 'away' : 'here',
     clock: t.demoSpeed || 1,
+    autopilot: Boolean(t.autopilot),
+    auto: (t.autoLog || []).slice(0, 8),
     cost: { idleUsd: Math.round(idleCostUsd * 100) / 100, rateUsdHour, loopSessions },
     sessions,
     permits: [],
@@ -449,6 +487,17 @@ export function startDemo(token, speed, ramp = false) {
       recentTools: [], touched: new Map(d.touched || []), lastEventAt: now,
     });
   }
+  // El registro de lo que se aprobó solo: es la prueba de que Peaje trabajó
+  // mientras no estabas, y sin auditoría decidir por alguien sería abuso.
+  t.autoLog = [
+    { at: now - 40_000, sessionId: 'demo-auth', who: 'diego', repo: 'buk-api',
+      tool: 'Bash', input: 'npm test', razon: 'comando de solo lectura' },
+    { at: now - 95_000, sessionId: 'demo-ui', who: 'sofía', repo: 'buk-web',
+      tool: 'Read', input: 'src/hooks/useAuth.ts', razon: 'Read no escribe nada' },
+    { at: now - 160_000, sessionId: 'demo-auth', who: 'diego', repo: 'buk-api',
+      tool: 'Grep', input: 'refreshToken', razon: 'Grep no escribe nada' },
+  ];
+
   return t;
 }
 

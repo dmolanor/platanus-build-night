@@ -7,7 +7,9 @@ import { fileURLToPath } from 'node:url';
 import {
   ingest, snapshot, newToken, getToken, startDemo, stopDemo, resetDebt, levelFor,
   NUDGE_MS, surfaceFromPayload, collisionFor, repoFromCwd,
+  isAway, autopilotOn, setAutopilot, logAuto, markHuman,
 } from './state.js';
+import { decidir } from './autopilot.js';
 import * as permits from './permits.js';
 import { aiBrief, aiAdvice, lastAiError } from './ai.js';
 
@@ -50,14 +52,7 @@ app.post('/hook', (req, res) => {
 
   if (payload.hook_event_name !== 'PermissionRequest') return res.status(200).end();
 
-  // Regla de retención (CONTRACT.md §3): si estás en el teclado, Peaje no te estorba.
   const snap = snapshot(token);
-  const ausente = snap.totalWaitedMs >= NUDGE_MS;
-  if (!ausente) return res.status(200).end();
-
-  // La recomendación llega después y se adjunta al permiso cuando esté lista.
-  // Los botones aparecen en el widget de inmediato, con o sin ella.
-  const session = snap.sessions.find((s) => s.sessionId === payload.session_id);
 
   // Detección de colisión en el instante en que todavía es gratis: aún no se ha
   // escrito una línea. Ya tenemos la intención (el hook la trae) y ya sabemos qué
@@ -65,6 +60,40 @@ app.post('/hook', (req, res) => {
   const surface = surfaceFromPayload(payload, repoFromCwd(payload.cwd));
   const collision = collisionFor(token, payload.session_id, surface);
 
+  // PILOTO AUTOMÁTICO: va ANTES de la compuerta de deuda. Si de verdad no estás,
+  // lo rutinario se aprueba ya — no tiene sentido dejar que la deuda crezca dos
+  // minutos para recién entonces decidir algo que no requería a nadie.
+  const veredicto = decidir({
+    tool: payload.tool_name,
+    input: payload.tool_input,
+    collision,
+    away: isAway(token),
+    encendido: autopilotOn(token),
+  });
+
+  if (veredicto.auto) {
+    logAuto(token, {
+      sessionId: payload.session_id,
+      who,
+      repo: repoFromCwd(payload.cwd),
+      tool: payload.tool_name,
+      input: String(payload.tool_input?.command || payload.tool_input?.file_path || '').slice(0, 120),
+      razon: veredicto.razon,
+    });
+    return res.status(200).json({
+      hookSpecificOutput: {
+        hookEventName: 'PermissionRequest',
+        decision: { behavior: 'allow' },
+      },
+    });
+  }
+
+  // Regla de retención (CONTRACT.md §3): si estás en el teclado, Peaje no te estorba.
+  if (snap.totalWaitedMs < NUDGE_MS) return res.status(200).end();
+
+  // La recomendación llega después y se adjunta al permiso cuando esté lista.
+  // Los botones aparecen en el widget de inmediato, con o sin ella.
+  const session = snap.sessions.find((s) => s.sessionId === payload.session_id);
   permits.hold({ token, who, payload, res, collision, onAdvice: (p) => aiAdvice(p, session, collision) });
 });
 
@@ -92,6 +121,7 @@ app.get('/events', (req, res) => {
 // ── Decisión remota sobre un permiso retenido ────────────────────────────────
 app.post('/api/permit/:id', (req, res) => {
   // Sin el token del equipo no se decide nada: esto ejecuta comandos en la máquina de alguien.
+  markHuman(tokenOf(req));   // tocaste un botón: estás aquí
   const ok = permits.resolve(req.params.id, req.body?.decision, tokenOf(req) || req.body?.token);
   if (!ok) return res.status(404).json({ ok: false });
   res.json({ ok: true });
@@ -202,6 +232,12 @@ app.get('/api/qr.svg', async (req, res) => {
   } catch {
     res.status(500).end();
   }
+});
+
+// Apagado por defecto: es lo único que ejecuta algo sin que mires.
+app.post('/api/autopilot', (req, res) => {
+  const on = setAutopilot(tokenOf(req), req.query.on === '1');
+  res.json({ ok: true, autopilot: on });
 });
 
 // Por qué la IA cayó al fallback. Para diagnosticar sin adivinar.
