@@ -48,10 +48,9 @@ body[data-level="toll"]  { background: #1c0407; }
 /* ── Vistas ───────────────────────────────────────────────────────────────── */
 .view { display: none; }
 body[data-view="normal"] #view-normal,
-body[data-view="toll"]   #view-toll,
 body[data-view="brief"]  #view-brief { display: flex; }
 
-#view-normal, #view-toll, #view-brief {
+#view-normal, #view-brief {
   position: absolute;
   inset: 0;
   flex-direction: column;
@@ -150,12 +149,6 @@ body[data-offline="1"] .conn {
   color: var(--dim);
   font-size: clamp(9px, 2.5vw, 12px);
   font-variant-numeric: tabular-nums;
-}
-.toll-human {
-  color: #ffd9d9;
-  font-size: clamp(13px, 3.6vw, 20px);
-  margin-top: 10px;
-  text-wrap: balance;
 }
 /* Reloj acelerado: se anuncia, no se esconde. */
 .clock {
@@ -499,68 +492,6 @@ body[data-offline="1"] .conn {
   text-align: center;
 }
 .permit-more[hidden] { display: none; }
-
-/* ── VISTA C · PINGS ──────────────────────────────────────────────────────── */
-#view-toll {
-  background:
-    radial-gradient(120% 90% at 50% 8%, #58060f 0%, #2b0508 45%, #150204 100%);
-  overflow: hidden;
-}
-
-.toll-ball {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: min(150vw, 150vh);
-  height: min(150vw, 150vh);
-  transform: translate(-50%, -50%);
-  opacity: .28;
-  pointer-events: none;
-  z-index: 0;
-}
-
-.toll-inner {
-  position: relative;
-  z-index: 1;
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  padding: 10px clamp(9px, 3vw, 24px) 10px;
-  overflow-y: auto;
-  min-width: 0;
-}
-
-.toll-tag {
-  color: #ff9aa2;
-  font-size: clamp(9px, 2.6vw, 13px);
-  font-weight: 800;
-  letter-spacing: .34em;
-  text-transform: uppercase;
-}
-.toll-debt {
-  font-size: clamp(44px, 17vw, 140px);
-  font-weight: 900;
-  line-height: .88;
-  letter-spacing: -0.045em;
-  font-variant-numeric: tabular-nums;
-  color: #fff;
-  text-shadow: 0 0 30px rgba(255, 40, 60, .55);
-}
-.toll-sub {
-  color: #ffb3ba;
-  font-size: clamp(10px, 2.8vw, 14px);
-  letter-spacing: .05em;
-  text-transform: uppercase;
-  margin-bottom: 2px;
-}
-
-#view-toll .permits { padding: 0; }
-#view-toll .permit { background: #1e0709; border-color: #7a2027; }
-
-#toll-lock { margin-top: auto; padding-top: 8px; }
-#toll-lock[hidden] { display: none; }
-#toll-pay { width: 100%; background: var(--accent); color: #170f00; }
-#toll-pay:disabled { background: #3a3323; color: #8b8672; }
 
 /* ── Brief ────────────────────────────────────────────────────────────────── */
 #view-brief { padding: 10px clamp(10px, 3vw, 24px) 10px; overflow-y: auto; }

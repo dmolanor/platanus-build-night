@@ -54,25 +54,6 @@
   </section>
 </main>
 
-<!-- C · alerta de deuda alta.
-     NO bloquea nada: fingir un bloqueo que el usuario cierra con un clic era la
-     parte más juguete del producto. Aquí solo se grita el número y se ofrece lo
-     único útil en ese momento: el ranking de a dónde volver. -->
-<section id="view-toll" class="view">
-  <div id="ball-toll" class="toll-ball"></div>
-  <div class="toll-inner">
-    <div class="toll-tag">Deuda alta</div>
-    <div id="toll-debt" class="toll-debt">0</div>
-    <div class="toll-sub">agent-minutos que les debes</div>
-    <div id="toll-human" class="toll-human"></div>
-    <section id="permits-toll" class="permits"></section>
-    <p id="toll-more" class="permit-more" hidden></p>
-    <div id="toll-lock">
-      <button id="toll-pay" class="btn big" type="button">Dime a dónde volver</button>
-    </div>
-  </div>
-</section>
-
 <!-- Brief: a dónde volver -->
 <section id="view-brief" class="view">
   <div class="brief-tag">Brief de vuelta</div>
@@ -357,9 +338,7 @@ function buildPermit() {
       S.resolved.add(id);
       S.deadlines.delete(id);
       root.dataset.gone = '1';
-      const wasToll = S.view === 'toll';
       setTimeout(() => { dropPermit(id); }, done ? 260 : 60);
-      if (wasToll) payToll();
     } catch (_) {
       allow.disabled = false;
       deny.disabled = false;
@@ -440,22 +419,10 @@ function activePermits() {
 }
 
 function renderPermits() {
-  const list = activePermits();
-  const inToll = S.view === 'toll';
-  // En el pings la salida es decidir EL PRIMERO: no ofrecemos alternativas.
-  const shown = inToll ? list.slice(0, 1) : list;
-
-  const more = $('toll-more');
-  if (inToll) {
-    clearList($('permits-normal'));
-    syncList($('permits-toll'), shown, (p) => p.id, buildPermit);
-    more.hidden = list.length <= 1;
-    more.textContent = list.length > 1 ? `y ${list.length - 1} permiso(s) más en la cola` : '';
-  } else {
-    clearList($('permits-toll'));
-    more.hidden = true;
-    syncList($('permits-normal'), shown, (p) => p.id, buildPermit);
-  }
+  // Una sola vista: los permisos van siempre arriba de la lista. Antes había que
+  // decidir en cuál de dos sitios pintarlos, y en la de deuda alta se mostraba
+  // solo el primero — una restricción que existía porque ahí había que "salir".
+  syncList($('permits-normal'), activePermits(), (p) => p.id, buildPermit);
 }
 
 // ── VISTA A · sesiones ──────────────────────────────────────────────────────
@@ -629,7 +596,6 @@ function renderDebt() {
   const txt = agentMinutes(S.totalWaitedMs);
   const node = $('debt');
   if (node.textContent !== txt) node.textContent = txt;
-  $('toll-debt').textContent = txt;
 
   // Sujeto, verbo, culpable. "3 agent-minutos" no significa nada a los 3 segundos;
   // "4 agentes llevan 3 minutos esperándote a ti" sí.
@@ -639,9 +605,6 @@ function renderDebt() {
     ? 'Nadie te está esperando. Estás al día.'
     : `${n} ${n === 1 ? 'agente lleva' : 'agentes llevan'} ${min} ${min === 1 ? 'minuto' : 'minutos'} esperándote a ti.`;
   if ($('debt-human').textContent !== frase) $('debt-human').textContent = frase;
-
-  const tollFrase = n === 0 ? '' : `${n} ${n === 1 ? 'agente parado' : 'agentes parados'} porque no has vuelto.`;
-  if ($('toll-human').textContent !== tollFrase) $('toll-human').textContent = tollFrase;
 
   // Esperar no quema tokens: esto es capacidad paralela perdida, y se dice así.
   const cost = $('debt-cost');
@@ -684,21 +647,15 @@ function setView(view) {
 }
 
 // ── VISTA C · pings ─────────────────────────────────────────────────────────
+// En deuda alta el brief aparece SOLO. La pantalla intermedia era el último resto
+// del bloqueo que quitamos: sin bloquear, era un cartel rojo con un botón para
+// pedir lo único que el producto promete hacer por sí mismo.
 function enterToll() {
-  setView('toll');
   announce(Math.round(S.totalWaitedMs / 60000) + ' agent-minutos parados. Te digo a cuál volver.');
+  mostrarBrief();
 }
 
-function renderTollLock() {
-  if (S.view !== 'toll') return;
-  // Con un permiso encima, lo urgente es decidirlo: el botón estorba.
-  $('toll-lock').hidden = activePermits().length > 0;
-  const btn = $('toll-pay');
-  btn.disabled = S.paying;
-  btn.textContent = S.paying ? 'Reconstruyendo…' : 'Dime a dónde volver';
-}
-
-async function payToll() {
+async function mostrarBrief() {
   if (S.paying) return;
   S.paying = true;
   S.tollGraceUntil = Date.now() + TOLL_GRACE_MS;
@@ -716,16 +673,13 @@ async function payToll() {
     brief = await r.json();
   } catch (_) {}
 
-  try {
-    await fetch(`/api/toll/complete?token=${QT}`, { method: 'POST' });
-  } catch (_) {}
-
+  // Ojo: acá NO se resetea la deuda. Resetear significa "ya volví", y eso lo
+  // decides tú al cerrar el brief — no puede pasar por el solo hecho de mirarlo.
   renderBrief(brief);
   S.paying = false;
   S.tollGraceUntil = Date.now() + TOLL_GRACE_MS;
 }
 
-$('toll-pay').addEventListener('click', payToll);
 
 // ── Brief ───────────────────────────────────────────────────────────────────
 function buildBriefItem() {
@@ -782,8 +736,10 @@ function renderBrief(brief) {
   say(b.headline ? String(b.headline) : '');
 }
 
-$('brief-close').addEventListener('click', () => {
+// Cerrar el brief es el gesto de "ya volví": ahí sí se salda la deuda.
+$('brief-close').addEventListener('click', async () => {
   S.tollGraceUntil = Math.max(S.tollGraceUntil, Date.now() + TOLL_GRACE_MS);
+  try { await fetch(`/api/toll/complete?token=${QT}`, { method: 'POST' }); } catch (_) {}
   setView('normal');
   applyPermitFlag();
 });
@@ -820,16 +776,13 @@ function render(snap) {
   renderLibres();
   renderPermits();
 
-  // Entrada y salida de la vista de deuda alta.
+  // Con la deuda alta el brief aparece solo, sin pantalla intermedia.
   // Estando fuera no se avisa: no hay nadie a quien avisarle. La deuda queda
-  // congelada y el pings salta en cuanto vuelves, que es cuando sirve.
+  // congelada y el brief salta en cuanto vuelves, que es cuando sirve.
   if (S.level === 'toll' && S.view === 'normal' && !S.paying && now >= S.tollGraceUntil
       && S.presence !== 'away') {
     enterToll();
-  } else if (S.level !== 'toll' && S.view === 'toll') {
-    setView('normal');   // la deuda desapareció por otro lado: el pings ya no aplica
   }
-  renderTollLock();
 
   if (typeof snap.speak === 'string') announce(snap.speak);
 }
@@ -888,7 +841,6 @@ setInterval(() => {
     if (node) tickPermit(node, id);
     if (deadline <= now) dropPermit(id);   // venció: el agente cae al prompt normal
   }
-  renderTollLock();
 }, 200);
 
 // El free tier de Render se duerme. Mientras el widget esté abierto, no.
@@ -896,7 +848,6 @@ setInterval(() => { fetch('/healthz').catch(() => {}); }, 10 * 60 * 1000);
 
 // ── Arranque ────────────────────────────────────────────────────────────────
 mount($('ball-normal'));
-mount($('ball-toll'));
 setLevel('calm');
 if (!TOKEN) $('empty').textContent = 'Sin token: abre el widget desde la página principal.';
 </script>

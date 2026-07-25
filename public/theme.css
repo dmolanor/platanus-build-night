@@ -64,8 +64,7 @@
    El atributo va en <html>, no en <body>: settings.js corre desde el <head> y ahí
    document.body todavía no existe. Ponerlo en html evita el flash de la bola
    apareciendo y desapareciendo, y no pisa los data- que el widget usa en body. */
-html[data-face="0"] .ball-slot,
-html[data-face="0"] .toll-ball { display: none; }
+html[data-face="0"] .ball-slot { display: none; }
 
 /* 2 · Acumulado del día. settings.js inyecta este nodo; no existe en el markup de
    widget.html. Mono porque lo dice la máquina. */
