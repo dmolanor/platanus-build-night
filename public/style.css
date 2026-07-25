@@ -30,7 +30,11 @@ html, body {
 }
 
 body {
-  background: var(--bg);
+  /* --bd = el fondo VIGENTE. Existe porque el pie del brief es sticky y necesita
+     tapar el texto que pasa por debajo; `background: var(--bg)` ahí se vería como
+     un parche gris sobre el rojo del nivel toll. */
+  --bd: var(--bg);
+  background: var(--bd);
   color: var(--text);
   font: 13px/1.35 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
@@ -43,7 +47,7 @@ body[data-level="calm"]  { --ball: #2fbf71; --ball-dark: #135c37; --hot: #9a9baa
 body[data-level="nudge"] { --ball: #ffd23f; --ball-dark: #8a6a00; --hot: #ffd23f; }
 body[data-level="angry"] { --ball: #ff4d4d; --ball-dark: #7a1414; --hot: #ff5a5a; }
 body[data-level="toll"]  { --ball: #c1121f; --ball-dark: #4a0810; --hot: #ff6b6b; }
-body[data-level="toll"]  { background: #1c0407; }
+body[data-level="toll"]  { --bd: #1c0407; }
 
 /* ── Vistas ───────────────────────────────────────────────────────────────── */
 .view { display: none; }
@@ -494,7 +498,15 @@ body[data-offline="1"] .conn {
 .permit-more[hidden] { display: none; }
 
 /* ── Brief ────────────────────────────────────────────────────────────────── */
-#view-brief { padding: 10px clamp(10px, 3vw, 24px) 10px; overflow-y: auto; }
+/* El que hace scroll es la LISTA, no la vista. Con la vista entera scrolleando,
+   la barra nativa se le montaba encima a los botones de #top (absolute, right:6px)
+   y el pie se iba bajo el fold. Acotando el scroll a la lista, el titular y el pie
+   quedan fijos y la barra vive en su propia franja. */
+#view-brief {
+  padding: 10px clamp(10px, 3vw, 24px) 10px;
+  overflow: hidden;
+}
+.brief-tag, .brief-head, .brief-foot { flex: 0 0 auto; }
 .brief-tag {
   color: var(--accent);
   font-size: clamp(9px, 2.5vw, 12px);
@@ -510,7 +522,18 @@ body[data-offline="1"] .conn {
   margin: 4px 0 8px;
   overflow-wrap: anywhere;
 }
-.brief-list { list-style: none; margin: 0; padding: 0; flex: 1 1 auto; min-width: 0; }
+/* min-height: 0 es obligatorio: sin él un hijo flex no se encoge por debajo de su
+   contenido y `overflow-y: auto` nunca llega a activarse. */
+.brief-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
 .brief-item {
   display: grid;
   grid-template-columns: auto 1fr;
@@ -557,12 +580,15 @@ body[data-offline="1"] .conn {
 .brief-why { color: #b6b7c4; font-size: clamp(10px, 2.8vw, 13px); margin-top: 3px; overflow-wrap: anywhere; }
 .brief-action { color: var(--accent); font-weight: 600; font-size: clamp(10px, 2.8vw, 13px); margin-top: 2px; overflow-wrap: anywhere; }
 .brief-action[hidden] { display: none; }
+/* Siempre visible. Cerrar el brief es el gesto de "ya volví" — es lo que resetea la
+   deuda — así que no puede quedar bajo el scroll. */
 .brief-foot {
   display: flex;
   gap: 8px;
   align-items: center;
-  margin-top: 10px;
+  margin-top: 8px;
   padding-top: 8px;
+  background: var(--bd);
   border-top: 1px solid var(--line);
 }
 .brief-src { color: #4d4e5a; font-size: 10px; letter-spacing: .05em; text-transform: uppercase; }
