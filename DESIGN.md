@@ -329,8 +329,11 @@ Reglas de construcción, todas por una razón concreta:
   cascada, así que el sistema es uno solo en la práctica, pero hay dos bloques de tokens en el
   repo. Se borra el de `style.css` cuando termine el trabajo en curso sobre el widget. Ugly y
   funcional, que es lo que `CLAUDE.md` autoriza para código que vive 8 horas.
-- **`demo-peaje-landing` es un token público a propósito**, para que el hero de la landing muestre
-  el producto corriendo sin backend. Alguien podría apuntar sus hooks ahí y salir en nuestra
-  landing. Inofensivo: nadie decide permisos reales sobre ese token.
+- **El hero de la landing acuña un token de preview por pestaña** (`sessionStorage`), separado del
+  token real del visitante: sembrarle sesiones de demo a su cola sería mentirle. Empezó siendo un
+  string fijo compartido y eso resultó ser exactamente lo que el guardia de formato de
+  `state.js:34` existe para rechazar. Un token por visitante cuesta memoria con TTL de 12 h, y a
+  cambio quita una carrera: con el token compartido, cada visitante re-sembraba el hero de los
+  demás.
 - **El acumulado "perdido hoy" vive en memoria y cada redeploy lo borra** (doc §7.7). Se dice en la
   UI, no se esconde.

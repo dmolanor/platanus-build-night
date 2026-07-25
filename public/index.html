@@ -517,8 +517,22 @@ ranking      = costo × peso(motivo) × (1 + loops)
 
 <script>
 const $ = (s) => document.querySelector(s);
-const PREVIEW = 'demo-peaje-landing';   // token público a propósito: el hero corre sin backend
 let token = new URLSearchParams(location.search).get('token') || localStorage.getItem('peaje_token');
+
+// El hero corre contra un token propio, no contra el tuyo: sembrarle sesiones de demo
+// a tu cola real sería mentirte. Es un token de verdad, acuñado con CSPRNG como
+// cualquier otro — un string fijo tipo "demo-landing" es exactamente lo que el
+// guardia de formato de state.js:34 existe para rechazar.
+// Va en sessionStorage y no en localStorage: la demo dura lo que dure la pestaña.
+let PREVIEW = sessionStorage.getItem('peaje_preview') || null;
+
+async function ensurePreview() {
+  if (!PREVIEW) {
+    PREVIEW = (await (await fetch('/api/token/new')).json()).token;
+    sessionStorage.setItem('peaje_preview', PREVIEW);
+  }
+  return PREVIEW;
+}
 
 // ── Token, QR y bloque de hooks ────────────────────────────────────────────
 async function ensureToken() {
@@ -553,7 +567,7 @@ function aplicar(recargar) {
   $('#hoy-rate').textContent = '$' + s.rate;
   pintarQR();
   pintarHoy();
-  if (!recargar) return;
+  if (!recargar || !PREVIEW) return;
   clearTimeout(t);
   t = setTimeout(() => { $('#preview').src = `/widget.html?${PEAJE.query(PREVIEW)}`; }, 450);
 }
@@ -594,7 +608,8 @@ $('#copiar').onclick = async () => {
 
 // ramp=1 arranca la deuda en cero para que se vea la escalada entera subiendo en vivo.
 $('#demo').onclick = async () => {
-  await fetch(`/api/demo/start?token=${PREVIEW}&ramp=1`, { method: 'POST' });
+  await ensurePreview();
+  await fetch(`/api/demo/start?token=${encodeURIComponent(PREVIEW)}&ramp=1`, { method: 'POST' });
   $('#preview').src = `/widget.html?${PEAJE.query(PREVIEW)}`;
 };
 
@@ -621,13 +636,17 @@ $('#abrir').onclick = async () => {
 // banda donde se ve la lista, que es lo que la landing está explicando al lado.
 // Con sensibilidad "estricto" sí entra al peaje, y está bien: eso es lo que hace estricto.
 async function sembrar() {
-  try { await fetch(`/api/demo/start?token=${PREVIEW}&speed=1`, { method: 'POST' }); } catch {}
+  try {
+    await ensurePreview();
+    await fetch(`/api/demo/start?token=${encodeURIComponent(PREVIEW)}&speed=1`, { method: 'POST' });
+  } catch {}
 }
 
 async function pintarHoy() {
+  if (!PREVIEW) return;
   try {
     const s = PEAJE.read();
-    const r = await fetch(`/api/state?token=${PREVIEW}&rate=${s.rate}`);
+    const r = await fetch(`/api/state?token=${encodeURIComponent(PREVIEW)}&rate=${s.rate}`);
     const ms = (await r.json()).cost?.perdidoHoyMs || 0;
     $('#hoy-min').textContent = ms < 30000 ? '0' : String(Math.round(ms / 60000));
     $('#hoy-usd').textContent = '$' + ((ms / 3600000) * s.rate).toFixed(2);
@@ -640,7 +659,10 @@ $('#s-who').value = s0.who;
 $('#s-rate').value = s0.rate;
 aplicar(false);
 ensureToken();
-sembrar().then(() => { $('#preview').src = `/widget.html?${PEAJE.query(PREVIEW)}`; });
+sembrar().then(() => {
+  $('#preview').src = `/widget.html?${PEAJE.query(PREVIEW)}`;
+  pintarHoy();
+});
 setInterval(sembrar, 30000);
 setInterval(pintarHoy, 10000);
 </script>
