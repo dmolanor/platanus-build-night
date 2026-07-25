@@ -327,7 +327,9 @@ app.get('/api/voice', async (req, res) => {
         body: JSON.stringify({
           text,
           model_id: process.env.ELEVENLABS_MODEL || 'eleven_flash_v2_5',
-          voice_settings: { stability: 0.4, similarity_boost: 0.8 },
+          // 0.7 aplana la entonación: suena sentencioso en vez de expresivo, que es el
+          // registro de "eso lo estás costando tú".
+          voice_settings: { stability: 0.7, similarity_boost: 0.8 },
         }),
         signal: AbortSignal.timeout(4000),   // el pitch no espera más
       },

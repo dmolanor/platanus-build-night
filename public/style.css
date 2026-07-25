@@ -796,3 +796,39 @@ body[data-offline="1"] .conn {
   overflow-wrap: anywhere;
 }
 .auto-why { color: var(--dim); font-size: clamp(9px, 2.4vw, 11px); }
+
+/* Avance por tareas: cercanía a terminar, medida en vez de adivinada. */
+.sess-prog {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+}
+.sess-prog[hidden] { display: none; }
+.sess-prog > i {
+  display: block;
+  height: 3px;
+  min-width: 2px;
+  border-radius: 2px;
+  background: var(--dim);
+  transition: width 500ms ease, background 400ms ease;
+}
+.sess-prog { position: relative; }
+.sess-prog::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 50%;
+  transform: translateY(-50%);
+  width: 52px; height: 3px;
+  border-radius: 2px;
+  background: #26272f;
+}
+.sess-prog > i { position: relative; z-index: 1; max-width: 52px; width: 0; }
+.sess-prog[data-casi="1"] > i { background: #4ecb7d; }
+.sess-prog > span {
+  color: var(--dim);
+  font-size: clamp(8.5px, 2.3vw, 10.5px);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.sess-prog[data-casi="1"] > span { color: #7fe3a6; }

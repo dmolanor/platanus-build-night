@@ -352,6 +352,9 @@ export function snapshot(token) {
       tasksOpen: s.tasksOpen || 0,
       tasksDone: s.tasksDone || 0,
       lastTask: s.lastTask || null,
+      // Avance real cuando el agente lleva lista de tareas. `null` si no la lleva:
+      // pintar 0% donde no hay datos miente, y la métrica solo vale si no miente.
+      progress: progressOf(s),
     });
   }
 
@@ -426,6 +429,16 @@ const REASON_ES = {
   idle: 'Lleva rato quieta',
 };
 
+// Cercanía a terminar, medida en vez de adivinada. Es el criterio que más le
+// faltaba al ranking: una sesión a un paso de cerrar es barata aunque lleve
+// menos rato esperando.
+function progressOf(s) {
+  const done = s.tasksDone || 0;
+  const total = done + (s.tasksOpen || 0);
+  if (total === 0) return null;
+  return { done, total, pct: Math.round((done / total) * 100) };
+}
+
 function whyFor(s, status) {
   if (status === 'stale') return 'Sin señales hace rato';
   if (status === 'working') return 'Trabajando';
@@ -469,26 +482,27 @@ export function startDemo(token, speed, ramp = false) {
   const now = Date.now();
   const seed = [
     { sessionId: 'demo-auth', repo: 'buk-api', who: 'diego', status: 'waiting', reason: 'permission',
-      title: 'Rotación de refresh tokens en auth',
+      title: 'Rotación de refresh tokens en auth', tareas: [4, 1],
       lastMessage: 'Quiero borrar db/migrations/ para regenerarlas desde cero.', loopCount: 0, subagents: 0, ageS: 40 },
     { sessionId: 'demo-checkout', repo: 'buk-api', who: 'diego', status: 'done', reason: 'completed',
-      title: 'Cupones de descuento en checkout',
+      title: 'Cupones de descuento en checkout', tareas: [5, 0],
       lastMessage: 'Listo. PR #212 abierto, solo falta que lo confirmes.', loopCount: 0, subagents: 0, ageS: 15 },
     // Sofía lleva rato en el mismo archivo que el permiso de abajo va a pedir:
     // así la colisión se ve en la demo sin tener que orquestar dos máquinas.
     { sessionId: 'demo-ui', repo: 'buk-web', who: 'sofía', status: 'waiting', reason: 'needs_input',
-      title: 'Arreglar hidratación del dashboard',
+      title: 'Arreglar hidratación del dashboard', tareas: [1, 4],
       lastMessage: 'Sigo viendo el mismo error de hidratación. Intento otra vez.', loopCount: 3, subagents: 3, ageS: 70,
       touched: [['buk-api/src/auth/client.ts', now - 6 * 60 * 1000]] },
     { sessionId: 'demo-infra', repo: 'buk-infra', who: 'diego', status: 'working', reason: null,
-      title: 'Migrar los workers a Fly',
+      title: 'Migrar los workers a Fly', tareas: [2, 3],
       lastMessage: null, loopCount: 0, subagents: 0, ageS: 5 },
   ];
   for (const d of seed) {
     t.sessions.set(d.sessionId, {
       sessionId: d.sessionId, repo: d.repo, who: d.who, status: d.status, reason: d.reason,
       since: now - (ramp ? 0 : d.ageS * 1000), lastMessage: d.lastMessage, loopCount: d.loopCount,
-      subagents: d.subagents, tasksOpen: 0, tasksDone: 0, lastTask: null,
+      subagents: d.subagents,
+      tasksDone: d.tareas ? d.tareas[0] : 0, tasksOpen: d.tareas ? d.tareas[1] : 0, lastTask: null,
       title: d.title, lastPrompt: null, model: null,
       recentTools: [], touched: new Map(d.touched || []), lastEventAt: now,
     });

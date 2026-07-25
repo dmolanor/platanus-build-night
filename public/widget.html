@@ -102,6 +102,7 @@ const S = {
   offline: true,
   muted: localStorage.getItem('peaje_mute') === '1',
   spoken: new Set(),
+  audio: null,            // el <audio> de ElevenLabs sonando ahora, para poder cortarlo
   deadlines: new Map(),   // permitId -> timestamp absoluto de expiración
   resolved: new Set(),    // permisos que ya decidimos, para no re-pintarlos
   lastMinutes: -1,
@@ -168,12 +169,9 @@ try {
   if (synth && synth.addEventListener) synth.addEventListener('voiceschanged', pickVoice);
 } catch (_) {}
 
-function say(text) {
-  const t = typeof text === 'string' ? text.trim() : '';
-  if (!t || S.spoken.has(t)) return;          // nunca repetir lo ya dicho
-  S.spoken.add(t);
-  if (S.spoken.size > 400) S.spoken.clear();
-  if (S.muted || !synth) return;
+// Voz del navegador: el suelo. Siempre disponible, no depende de la red.
+function sayNative(t) {
+  if (!synth) return;
   try {
     const u = new SpeechSynthesisUtterance(t);
     u.lang = (voice && voice.lang) || 'es-ES';
@@ -182,6 +180,28 @@ function say(text) {
     u.pitch = 0.95;
     synth.speak(u);                            // autoplay bloqueado → falla en silencio
   } catch (_) {}
+}
+
+// ElevenLabs primero, navegador si falla. El servidor responde 204 sin key, 429
+// si se pasó del rate limit; en ambos casos `r.ok` es false y caemos al suelo.
+async function say(text) {
+  const t = typeof text === 'string' ? text.trim() : '';
+  if (!t || S.spoken.has(t)) return;          // nunca repetir lo ya dicho
+  S.spoken.add(t);
+  if (S.spoken.size > 400) S.spoken.clear();
+  if (S.muted) return;
+  try {
+    const r = await fetch(`/api/voice?token=${QT}&text=${encodeURIComponent(t)}`);
+    if (r.ok && r.status !== 204) {
+      const a = new Audio(URL.createObjectURL(await r.blob()));
+      a.addEventListener('ended', () => { try { URL.revokeObjectURL(a.src); } catch (_) {} });
+      if (S.muted) return;                     // se apagó mientras sintetizaba
+      S.audio = a;                             // referencia para poder cortarla
+      await a.play();                          // si el autoplay lo bloquea, rechaza → catch
+      return;
+    }
+  } catch (_) {}
+  if (!S.muted) sayNative(t);
 }
 
 // Un solo texto, dos canales. `announce` deduplica ANTES de que say() marque el
@@ -214,7 +234,10 @@ function paintMute() {
 $('mute').addEventListener('click', () => {
   S.muted = !S.muted;
   localStorage.setItem('peaje_mute', S.muted ? '1' : '0');
-  if (S.muted) { try { synth && synth.cancel(); } catch (_) {} }
+  if (S.muted) {
+    try { synth && synth.cancel(); } catch (_) {}
+    try { S.audio && S.audio.pause(); S.audio = null; } catch (_) {}
+  }
   paintMute();
 });
 paintMute();
@@ -419,7 +442,14 @@ function buildSession() {
   const why = el('div', 'sess-why');
   const action = el('div', 'sess-action');
   const msg = el('div', 'sess-msg');
-  main.append(head, where, why, action, msg);
+  // Avance solo cuando el agente lleva lista de tareas. Sin datos no se pinta:
+  // un 0% inventado es peor que no decir nada.
+  const prog = el('div', 'sess-prog');
+  const progBar = el('i');
+  const progTxt = el('span');
+  prog.append(progBar, progTxt);
+  prog.hidden = true;
+  main.append(head, where, prog, why, action, msg);
 
   const cost = el('div', 'sess-cost');
   const costN = el('b');
@@ -446,6 +476,16 @@ function buildSession() {
     cost.hidden = ms <= 0;
     costN.textContent = agentMinutes(ms);
     costU.textContent = 'agent-min' + mult;
+
+    const pr = s.progress;
+    if (pr && pr.total > 0) {
+      prog.hidden = false;
+      progBar.style.width = Math.min(100, Math.max(0, pr.pct)) + '%';
+      progTxt.textContent = `${pr.pct}% · ${pr.done} de ${pr.total} tareas`;
+      prog.dataset.casi = pr.pct >= 80 ? '1' : '0';
+    } else {
+      prog.hidden = true;
+    }
 
     why.textContent = s.why || motivo(s);
 

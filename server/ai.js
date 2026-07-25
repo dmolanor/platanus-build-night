@@ -163,6 +163,8 @@ Tu trabajo es decidir POR CUÁL EMPEZAR, usando lo que solo se ve leyendo cada s
 
 1. CERCANÍA A TERMINAR — una sesión a un paso de cerrar es barata: ciérrala y baja el número de
    frentes abiertos. Vale más que una que apenas arrancó, aunque lleve menos tiempo esperando.
+   Cuando te doy "avance", úsalo: es un dato medido, no una impresión. Si no aparece, esa sesión
+   no lleva lista de tareas y ahí sí tienes que inferirlo del texto.
 2. CONSECUENCIA DEL BLOQUEO — no todos los permisos pesan igual. Leer un archivo y borrar una
    tabla de producción son ambos "permiso"; solo uno es urgente.
 3. COSTO DE RETOMARLA — reconstruir el contexto de un refactor que dejó hace 40 minutos le cuesta
@@ -212,6 +214,9 @@ export async function aiBrief(snap) {
                     `   cuesta: ${minutes(s.costMs ?? s.waitedMs)} agent-min` +
                     `${s.blockedAgents > 1 ? ` (${s.blockedAgents} agentes parados)` : ''}` +
                     ` · intentos repetidos: ${s.loopCount}\n` +
+                    (s.progress
+                      ? `   avance: ${s.progress.done} de ${s.progress.total} tareas (${s.progress.pct}%)\n`
+                      : '') +
                     `   lo último que le pidió: ${s.lastPrompt || '(no registrado)'}\n` +
                     `   dónde quedó: ${s.lastMessage || '(sin mensaje)'}`,
                 )
