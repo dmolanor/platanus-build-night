@@ -290,6 +290,9 @@ export function snapshot(token) {
       waitedMs,
       lastMessage: s.lastMessage,
       loopCount: s.loopCount,
+      why: whyFor(s, status),
+      action: actionFor(s, status),
+      costMs: waitedMs * blockedAgents,
       tasksOpen: s.tasksOpen || 0,
       tasksDone: s.tasksDone || 0,
       lastTask: s.lastTask || null,
@@ -352,6 +355,32 @@ function speakFor(t, level, total, sessions) {
     }
   }
   return t.speakText;
+}
+
+// El porqué y el qué-hacer de cada sesión, sin modelo. Viven aquí y no en ai.js
+// porque son la vista por defecto: la lista ordenada tiene que ser útil siempre,
+// con o sin API key. La IA los enriquece, no los sustituye.
+const REASON_ES = {
+  permission: 'Pidió permiso y está congelada',
+  needs_input: 'Necesita que decidas algo',
+  failed: 'Falló y se detuvo',
+  completed: 'Terminó, falta que confirmes',
+  idle: 'Lleva rato quieta',
+};
+
+function whyFor(s, status) {
+  if (status === 'stale') return 'Sin señales hace rato';
+  if (status === 'working') return 'Trabajando';
+  return REASON_ES[s.reason] || 'Te está esperando';
+}
+
+function actionFor(s, status) {
+  if (status === 'working' || status === 'stale') return null;
+  if (s.loopCount >= 1) return 'Se está dando vueltas: ciérrala';
+  if (s.reason === 'permission') return 'Decide el permiso desde aquí';
+  if (s.reason === 'completed') return 'Confírmala y ciérrala';
+  if (s.reason === 'failed') return 'Revisa el error';
+  return 'Ve a esta primero';
 }
 
 // CONTRACT.md §6 — fallback determinista. Se construye ANTES que la IA y nunca se apaga.

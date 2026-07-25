@@ -111,42 +111,44 @@ body[data-offline="1"] .conn {
   flex: 0 0 auto;
 }
 
+/* La bola es señal ambiental, no protagonista: se ojea, no se lee. */
 .ball-slot {
   flex: 0 0 auto;
-  width: clamp(52px, 17vw, 120px);
-  height: clamp(52px, 17vw, 120px);
+  width: clamp(38px, 11vw, 64px);
+  height: clamp(38px, 11vw, 64px);
 }
 
-#debt-wrap { min-width: 0; }
+#debt-wrap { min-width: 0; flex: 1; }
+
+/* El número acompaña a la frase en una sola línea. Es contexto, no titular. */
+.debt-line { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; margin-top: 2px; }
 
 .debt {
-  font-size: clamp(30px, 11vw, 72px);
+  font-size: clamp(19px, 5.5vw, 30px);
   font-weight: 800;
-  line-height: .95;
-  letter-spacing: -0.035em;
+  line-height: 1;
+  letter-spacing: -0.03em;
   font-variant-numeric: tabular-nums;
   color: var(--hot);
   transition: color 400ms ease;
 }
 .debt-label {
   color: var(--dim);
-  font-size: clamp(9px, 2.6vw, 13px);
+  font-size: clamp(9px, 2.6vw, 12px);
   letter-spacing: .05em;
   text-transform: uppercase;
-  margin-top: 3px;
 }
-/* La frase es lo que se lee en 3 segundos; el número es el que duele después. */
+/* La frase es lo que se lee en 3 segundos. Va primero. */
 .debt-human {
   color: var(--text);
-  font-size: clamp(11px, 3.1vw, 15px);
-  line-height: 1.25;
-  margin-top: 6px;
+  font-size: clamp(11.5px, 3.2vw, 16px);
+  font-weight: 600;
+  line-height: 1.22;
   text-wrap: balance;
 }
 .debt-cost {
   color: var(--dim);
   font-size: clamp(9px, 2.5vw, 12px);
-  margin-top: 3px;
   font-variant-numeric: tabular-nums;
 }
 .toll-human {
@@ -201,93 +203,99 @@ body[data-offline="1"] .conn {
 
 /* En pantallas altas (celular) la bola manda: se apila y crece. */
 @media (min-height: 430px) {
-  #hero { flex-direction: column; text-align: center; gap: 10px; padding-top: 22px; }
-  .ball-slot { width: clamp(110px, 34vw, 200px); height: clamp(110px, 34vw, 200px); }
+  #hero { padding-top: 14px; }
+  .ball-slot { width: clamp(52px, 15vw, 84px); height: clamp(52px, 15vw, 84px); }
 }
-/* Con permisos en pantalla, el héroe se aparta: el permiso es lo urgente. */
-body[data-permits="1"] #hero { flex-direction: row; text-align: left; padding-top: 6px; gap: 10px; }
-body[data-permits="1"] .ball-slot { width: clamp(40px, 12vw, 72px); height: clamp(40px, 12vw, 72px); }
-body[data-permits="1"] .debt { font-size: clamp(24px, 7vw, 44px); }
 
-/* ── Lista de sesiones ────────────────────────────────────────────────────── */
+/* ── Lista de sesiones: EL HÉROE ──────────────────────────────────────────────
+   Cada fila responde, en este orden visual: cuánto te cuesta · por qué está
+   parada · qué hacer. El costo es lo que la premisa promete, así que domina. */
 .sessions {
   list-style: none;
-  margin: 4px 0 0;
+  margin: 2px 0 0;
   padding: 0 clamp(10px, 3vw, 22px);
   min-width: 0;
 }
 
 .sess {
   border-top: 1px solid var(--line);
-  padding: 6px 0 7px;
+  padding: 8px 0 9px;
   display: grid;
   grid-template-columns: auto 1fr auto;
-  grid-template-areas: "dot head time" ". why why" ". msg msg" ". loop loop";
-  column-gap: 7px;
-  align-items: baseline;
+  column-gap: 10px;
+  align-items: start;
   min-width: 0;
 }
+.sess[data-status="working"], .sess[data-status="stale"] { opacity: .5; }
 
-.sess .dot {
-  grid-area: dot;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--dim);
-  align-self: center;
-  transform: translateY(1px);
-  flex: 0 0 auto;
+.rank {
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+  font-size: clamp(11px, 3vw, 14px);
+  color: var(--dim);
+  min-width: 1.1em;
+  text-align: right;
+  padding-top: 1px;
 }
-.sess[data-status="waiting"] .dot { background: var(--red); }
-.sess[data-status="done"]    .dot { background: var(--accent); }
-.sess[data-status="working"] .dot { background: var(--green); }
-.sess[data-status="stale"]   .dot { background: #4a4b57; }
+.sess[data-status="waiting"] .rank,
+.sess[data-status="done"] .rank { color: var(--hot); }
+.rank[hidden] { display: none; }
 
-.sess-head {
-  grid-area: head;
-  min-width: 0;
-  display: flex;
-  gap: 5px;
-  align-items: baseline;
-  overflow: hidden;
-}
+.sess-main { min-width: 0; }
+
+.sess-head { display: flex; gap: 5px; align-items: baseline; overflow: hidden; min-width: 0; }
 .sess-repo {
   font-weight: 700;
   font-size: clamp(12px, 3.2vw, 15px);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .sess-who { color: var(--dim); font-size: clamp(10px, 2.8vw, 13px); white-space: nowrap; }
-.sess-time {
-  grid-area: time;
-  font-variant-numeric: tabular-nums;
-  font-weight: 700;
-  font-size: clamp(11px, 3vw, 14px);
-  color: var(--dim);
-  white-space: nowrap;
-}
-.sess[data-status="waiting"] .sess-time,
-.sess[data-status="done"] .sess-time { color: var(--hot); }
 
-.sess-why {
-  grid-area: why;
-  color: #b6b7c4;
+.sess-why { color: #b6b7c4; font-size: clamp(10px, 2.8vw, 13px); margin-top: 2px; }
+
+/* La acción es lo único accionable de la fila: se destaca. */
+.sess-action {
+  color: var(--accent);
   font-size: clamp(10px, 2.8vw, 13px);
-  margin-top: 1px;
-}
-.sess-msg {
-  grid-area: msg;
-  color: var(--dim);
-  font-size: clamp(10px, 2.7vw, 12.5px);
+  font-weight: 600;
   margin-top: 2px;
+}
+.sess-action[hidden] { display: none; }
+.sess[data-loop="1"] .sess-action { color: #ff9d3d; }
+
+.sess-msg {
+  color: var(--dim);
+  font-size: clamp(9.5px, 2.6vw, 12px);
+  margin-top: 3px;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
   overflow-wrap: anywhere;
 }
-.sess-msg:empty { display: none; }
+.sess-msg[hidden], .sess-msg:empty { display: none; }
+
+/* El costo por sesión: la respuesta a "en cuál estoy perdiendo más". */
+.sess-cost { text-align: right; white-space: nowrap; padding-top: 1px; }
+.sess-cost[hidden] { display: none; }
+.sess-cost b {
+  display: block;
+  font-variant-numeric: tabular-nums;
+  font-size: clamp(15px, 4.4vw, 22px);
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -.02em;
+  color: var(--dim);
+}
+.sess[data-status="waiting"] .sess-cost b,
+.sess[data-status="done"] .sess-cost b { color: var(--hot); }
+.sess-cost span {
+  display: block;
+  color: var(--dim);
+  font-size: clamp(8px, 2.2vw, 10px);
+  letter-spacing: .03em;
+  margin-top: 2px;
+}
 
 .loop {
   grid-area: loop;

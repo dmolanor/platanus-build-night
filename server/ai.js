@@ -18,14 +18,6 @@ function parseJson(response) {
   return text ? JSON.parse(text) : null;
 }
 
-const REASON_ES = {
-  permission: 'pidió permiso',
-  needs_input: 'necesita que decidas',
-  failed: 'falló',
-  completed: 'terminó, falta confirmar',
-  idle: 'lleva rato quieta',
-};
-
 function minutes(ms) {
   return Math.max(1, Math.round(ms / 60000));
 }
@@ -42,20 +34,15 @@ export function fallbackBrief(snap) {
     headline: ranked.length
       ? `${ranked.length} sesiones te esperan. ${minutes(snap.totalWaitedMs)} agent-minutos de deuda.`
       : 'Nadie te está esperando. Estás al día.',
+    // El porqué y la acción salen de state.js: son los mismos que ve la lista por
+    // defecto, así el brief no contradice lo que ya tenías en pantalla.
     items: ranked.map((s) => ({
       sessionId: s.sessionId,
       repo: s.repo,
       who: s.who,
-      minutes: minutes(s.waitedMs),
-      why: REASON_ES[s.reason] || 'esperando',
-      action:
-        s.loopCount >= 1
-          ? 'Se está dando vueltas: considera cerrarla.'
-          : s.reason === 'permission'
-            ? 'Decide el permiso desde aquí.'
-            : s.reason === 'completed'
-              ? 'Solo falta que confirmes.'
-              : 'Ve a esta primero.',
+      minutes: minutes(s.costMs ?? s.waitedMs),
+      why: s.why || 'Te está esperando',
+      action: s.action || 'Ve a esta primero',
     })),
   };
 }

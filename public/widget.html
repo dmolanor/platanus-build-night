@@ -17,17 +17,20 @@
 
 <!-- A · vista normal -->
 <main id="view-normal" class="view">
-  <section id="permits-normal" class="permits"></section>
-  <div id="hero">
+  <!-- El contador es CONTEXTO, no protagonista: la pregunta que importa no es
+       "cuánto debes" sino "en cuál estás perdiendo más". La lista es el héroe. -->
+  <header id="hero">
     <div id="ball-normal" class="ball-slot"></div>
     <div id="debt-wrap">
-      <div id="debt" class="debt">0</div>
-      <div class="debt-label">agent-minutos de deuda</div>
-      <!-- La frase es lo que un jurado entiende en 3 segundos. El número es jerga. -->
       <div id="debt-human" class="debt-human">Nadie te está esperando.</div>
-      <div id="debt-cost" class="debt-cost" hidden></div>
+      <div class="debt-line">
+        <span id="debt" class="debt">0</span>
+        <span class="debt-label">agent-min</span>
+        <span id="debt-cost" class="debt-cost" hidden></span>
+      </div>
     </div>
-  </div>
+  </header>
+  <section id="permits-normal" class="permits"></section>
   <!-- Pinta EXACTAMENTE el mismo string que dice la voz. Un solo texto, dos canales:
        así no hay nada que mantener sincronizado, y si el audio falla en el venue
        la escalada sigue siendo legible. -->
@@ -393,36 +396,69 @@ function renderPermits() {
 }
 
 // ── VISTA A · sesiones ──────────────────────────────────────────────────────
+// Cada fila responde las tres preguntas del producto, en este orden visual:
+// cuánto te cuesta · por qué está parada · qué hacer.
 function buildSession() {
   const root = el('li', 'sess');
-  const dot = el('span', 'dot');
+
+  const rank = el('span', 'rank');
+
+  const main = el('div', 'sess-main');
   const head = el('div', 'sess-head');
   const repo = el('span', 'sess-repo');
   const who = el('span', 'sess-who');
   head.append(repo, who);
-  const time = el('span', 'sess-time');
   const why = el('div', 'sess-why');
+  const action = el('div', 'sess-action');
   const msg = el('div', 'sess-msg');
-  const loop = el('span', 'loop', 'se está dando vueltas');
-  loop.hidden = true;
-  root.append(dot, head, time, why, msg, loop);
+  main.append(head, why, action, msg);
+
+  const cost = el('div', 'sess-cost');
+  const costN = el('b');
+  const costU = el('span', null, 'agent-min');
+  cost.append(costN, costU);
+
+  root.append(rank, main, cost);
 
   function update(s) {
     root.dataset.status = s.status || 'working';
+    root.dataset.loop = Number(s.loopCount) >= 1 ? '1' : '0';
+
+    rank.textContent = s.rank ? String(s.rank) : '';
+    rank.hidden = !s.rank;
+
     repo.textContent = basename(s.repo);
     who.textContent = s.who ? '· ' + s.who : '';
-    time.textContent = s.waitedMs > 0 ? dur(s.waitedMs) : '—';
-    const tarea = s.lastTask ? ' · ' + s.lastTask : '';
-    why.textContent = motivo(s) + tarea;
+
+    // El costo es el protagonista de la fila: es la pregunta que el producto responde.
+    const ms = Number(s.costMs ?? s.waitedMs) || 0;
+    const mult = Number(s.blockedAgents) > 1 ? ` (${s.blockedAgents} agentes)` : '';
+    cost.hidden = ms <= 0;
+    costN.textContent = agentMinutes(ms);
+    costU.textContent = 'agent-min' + mult;
+
+    why.textContent = s.why || motivo(s);
+
+    const act = Number(s.loopCount) >= 1 ? 'Se está dando vueltas: ciérrala' : s.action;
+    action.textContent = act ? '→ ' + act : '';
+    action.hidden = !act;
+
     msg.textContent = s.lastMessage ? String(s.lastMessage) : '';
-    loop.hidden = !(Number(s.loopCount) >= 1);
+    msg.hidden = !s.lastMessage;
   }
 
   return { el: root, update };
 }
 
 function renderSessions() {
-  syncList($('sessions'), S.sessions, (s) => s.sessionId, buildSession);
+  // El ranking numera solo lo que TE ESTÁ COSTANDO. Las sesiones trabajando van
+  // debajo, sin número: son contexto, no deuda.
+  let n = 0;
+  const conRank = S.sessions.map((s) => {
+    const cuenta = s.status === 'waiting' || s.status === 'done';
+    return { ...s, rank: cuenta ? ++n : 0 };
+  });
+  syncList($('sessions'), conRank, (s) => s.sessionId, buildSession);
   $('empty').hidden = S.sessions.length > 0;
 }
 
