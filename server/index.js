@@ -238,6 +238,10 @@ const briefUltimo = new Map();
 let briefEstaHora = { hora: 0, n: 0 };
 const BRIEF_COOLDOWN_MS = 10_000;
 const BRIEF_TOPE_HORA = 120;
+// Último brief de IA por token. 60 s: pasado eso el ranking ya envejeció y es más
+// honesto el fallback fresco que una foto vieja.
+const briefCache = new Map();
+const BRIEF_CACHE_MS = 60_000;
 
 app.get('/api/brief', async (req, res) => {
   const token = tokenOf(req);
@@ -250,12 +254,20 @@ app.get('/api/brief', async (req, res) => {
   const frio = ahora - (briefUltimo.get(token) || 0) < BRIEF_COOLDOWN_MS;
   const topado = briefEstaHora.n >= BRIEF_TOPE_HORA;
   const snap = snapshot(token);
-  // Con cooldown o tope, el fallback determinista responde igual de bien y gratis.
-  if (frio || topado) return res.json(fallbackBrief(snap));
+  if (frio || topado) {
+    // Durante el cooldown devolvemos el ÚLTIMO brief bueno, no el fallback: en 10 s
+    // el ranking no cambió, y degradar a la versión mecánica cuando abres, cierras y
+    // reabres se lee como "la IA falló" cuando en realidad la estamos protegiendo.
+    const previo = briefCache.get(token);
+    if (previo && ahora - previo.at < BRIEF_CACHE_MS) return res.json(previo.brief);
+    return res.json(fallbackBrief(snap));
+  }
 
   briefUltimo.set(token, ahora);
   briefEstaHora.n++;
-  res.json(await aiBrief(snap));
+  const brief = await aiBrief(snap);
+  if (brief && brief.source === 'ia') briefCache.set(token, { at: Date.now(), brief });
+  res.json(brief);
 });
 
 app.post('/api/toll/complete', (req, res) => {
@@ -454,6 +466,9 @@ app.get('/api/voice', async (req, res) => {
 app.delete('/api/token', (req, res) => {
   const token = tokenOf(req);
   if (!token) return res.status(404).json({ ok: false });
+  // El brief cacheado lleva etiquetas y mensajes de tus sesiones: muere con el token.
+  briefCache.delete(token);
+  briefUltimo.delete(token);
   res.json({ ok: true, existia: revocar(token) });
 });
 
