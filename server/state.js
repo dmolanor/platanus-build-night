@@ -10,7 +10,7 @@ const TOKEN_TTL_MS = 12 * 60 * 60 * 1000;
 
 // Sin eventos en NINGUNA sesión por este tiempo, no estás distraído: estás fuera
 // (almuerzo, casa, dormido). La deuda se CONGELA —no se borra— y nos callamos.
-// Nadie a quien intervenir en una silla vacía. El pings te cobra al volver.
+// Nadie a quien intervenir en una silla vacía. Pings te avisa al volver.
 const AWAY_MS = 30 * 60 * 1000;
 
 // Mucho más tarde: la sesión está abandonada de verdad (terminal cerrada, máquina

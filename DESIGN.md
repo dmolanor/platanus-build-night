@@ -69,7 +69,7 @@ trabajo a cada uno.
 | Token | Hex | Único trabajo |
 |---|---|---|
 | `--calm` | `#2fbf71` | nadie te espera |
-| `--warn` | `#ffd23f` | atención · la marca · el pings |
+| `--warn` | `#ffd23f` | atención · la marca · la deuda alta |
 | `--red` | `#ff4d4d` | alguien está bloqueado |
 
 Un color = un significado. Si un elemento es amarillo, es porque reclama atención. Si hace falta un
@@ -323,7 +323,118 @@ Reglas de construcción, todas por una razón concreta:
 
 ---
 
-## 10. Deuda conocida
+### El viewBox se ajusta a la tinta, no a un cuadrado cómodo
+
+El error más caro del personaje, y vale escribirlo porque se repite. Con
+`viewBox="0 0 120 120"` en un slot de 42×42, **el plátano se dibujaba a 16×34 px — el 30% del
+área**. La causa no era el slot: la tinta de los tres tramos del lomo ocupa `x 28,5..75,6` de 120,
+así que **el 61% del ancho del viewBox estaba vacío**, y `preserveAspectRatio: meet` encajona una
+forma vertical dentro de un cuadrado hasta que cabe por su lado largo.
+
+El viewBox es `25 5 54 105` y `.ball-slot` lleva esa misma proporción. Resultado: se dibuja ~2,7×
+más grande **ocupando menos ancho de layout que antes**, así que el bloque de texto de al lado ganó
+espacio en vez de perderlo.
+
+Corolario: el puré tiene el mismo ancho que el plátano. Dos siluetas de anchos distintos dentro de
+un viewBox recortado se ven descentradas una respecto de la otra. Y la cara, que en el plátano va
+sobre la barriga (a la derecha del eje), en el charco simétrico hay que recentrarla.
+
+### El personaje también vive fuera del widget
+
+La landing lo monta desde el **mismo `character.js`**, no desde una copia. Dos cosas lo permiten sin
+cargar `style.css` (700 líneas de CSS de widget que le pisarían el `body`):
+
+- La paleta se declara en **dos selectores**: `body[data-level]` y `.pings-char[data-level]`. El
+  segundo hace que el personaje lleve su color a cualquier contexto.
+- Lo mínimo para que renderice está en `theme.css` **scopeado bajo `.ripen`**. El widget no ve ni
+  una de esas reglas, así que no hay dos copias compitiendo por el mismo elemento.
+
+---
+
+## 10. El widget, elemento por elemento
+
+Auditado midiendo a **380×280**, que es el tamaño real de la PiP. Los `clamp()` a ese ancho dan
+valores muy distintos de los de un navegador maximizado: **auditar el widget en una ventana grande
+no sirve**.
+
+| Elemento | px | Contraste | Estado |
+|---|---|---|---|
+| Frase humana | 12,2 | 15,94:1 | es lo que se lee en 3 s, va primero |
+| Número de deuda | 20,9 | 7,02:1 | contexto, no titular |
+| Costo actual | **11** | 5,72:1 | era 9,5 px |
+| Acumulado del día | **10,4** | **5,72:1** | era 8,7 px y **2,35:1 — fallaba AA** |
+| Unidad de la fila | **9,5** | 5,72:1 | era 8,4 px |
+| Motivo / acción | 10,6 | 9,7 / 9,32:1 | ok |
+
+**Mínimo:** 4,5:1 para texto normal (WCAG AA). Ningún texto del widget baja de ahí.
+
+### El botón de voz tiene tres estados, no dos
+
+«VOZ ON» gastaba 56 px del rincón más valioso de la ventana para decir algo **que ya es audible**:
+si la voz está encendida, la oyes. Es un control, no una lectura de la máquina, y en mayúsculas a
+10 px se leía como lo segundo.
+
+Pero hay un tercer estado que **sí necesita palabras**: «toca para oír». Ahí el navegador tiene el
+audio bloqueado, no se oye nada, y nada más en la interfaz lo explica. Un glifo no alcanza para
+pedir una acción.
+
+| Estado | Qué se ve | Ancho |
+|---|---|---|
+| Audio bloqueado | texto «toca para oír» en ámbar | 59 px |
+| Voz encendida | glifo `♪` | **24 px** |
+| Muteada | glifo `♪` tachado | **24 px** |
+
+El texto sigue en el DOM (`color: transparent`, no `display: none`) porque es el nombre accesible
+del botón.
+
+### El color de una fila dice el estado de ESA fila
+
+El defecto: `style.css` pintaba `waiting` y `done` con `var(--hot)`, que es el color del nivel
+**global**. Las cuatro filas salían del mismo color, y una sesión que **terminó** —buenas noticias,
+solo hay que confirmar— se veía igual de roja que una congelada pidiendo permiso. El color no
+informaba nada.
+
+Cada fila lleva ahora una espina de 2 px en el margen izquierdo, más su rango y su número:
+
+| `reason` | Peso | Color | Por qué |
+|---|---|---|---|
+| `permission` · `failed` | 3.0 · 2.0 | `--red` | hay un proceso real detenido |
+| `needs_input` · `idle` | 2.5 · 1.0 | `--warn` | te espera para decidir |
+| `completed` | 1.5 | `--calm` | terminó: confirma y cierra |
+| `working` · `stale` | — | `--dim-2` | no requiere nada de ti |
+
+Sin inventar un cuarto color. El motivo exacto lo sigue diciendo el texto de `.sess-why`: **el color
+solo carga el grado de urgencia**, que es lo que permite triar de un vistazo sin leer. Requiere
+`data-reason` en el `<li>` — una línea en `widget.html`.
+
+---
+
+## 11. La landing: densidad y navegación
+
+Medido, no estimado. La página son ~12 pantallas y sirve a **dos lectores con necesidades
+opuestas**: quien va a instalar tendría que atravesar cinco secciones de argumento, y quien evalúa
+necesita ese argumento. Reordenar arregla a uno y rompe al otro.
+
+La solución es un **índice de las 8 secciones en la barra**, que deja que cada uno se sirva solo.
+Marca la sección visible con un `IntersectionObserver` puntual — no el scroll-reveal uniforme que
+§5 prohíbe: acá no aparece nada, solo se resalta dónde estás.
+
+Dos arreglos de flujo que no eran de estética:
+
+- **El nombre vivía en «Hazlo tuyo» (06) pero alimenta el bloque de hooks que se copia en
+  «Instalar» (07).** Quien lo cambiara después de copiar tenía que volver a copiar, sin que nada se
+  lo dijera. El campo está ahora en el paso 1, al lado del token.
+- **Quien leía hasta el final se quedaba sin acción**, porque instalar es la sección 07 y ya pasó.
+  Hay un cierre con el mismo botón. No es un «¿listo para empezar?» —§6 lo prohíbe— sino el botón
+  otra vez, donde hace falta.
+
+Recortes: 838 → 761 palabras. Se fusionaron párrafos que decían lo mismo con distinta redacción y
+se borraron los `hint` que explicaban bloques mono que ya se explican solos. **No se tocaron las
+etiquetas de los campos de GitHub**: se agregaron a propósito porque no decían qué iba en cada uno.
+
+---
+
+## 12. Deuda conocida
 
 - **`public/style.css` sigue declarando su propio `:root`.** `theme.css` se carga después y gana la
   cascada, así que el sistema es uno solo en la práctica, pero hay dos bloques de tokens en el

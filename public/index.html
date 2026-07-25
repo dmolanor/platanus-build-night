@@ -47,6 +47,51 @@
   }
   .bar-end { margin-left: auto; display: flex; align-items: center; gap: 12px; }
 
+  /* Índice: 8 secciones numeradas y ninguna forma de saltar entre ellas. La página
+     mide casi 12 pantallas y sirve a dos lectores con necesidades opuestas — quien va
+     a instalar y quien está evaluando. El índice deja que cada uno se sirva solo, sin
+     reordenar la página para uno y romperla para el otro. */
+  .idx { display: flex; gap: 2px; margin-left: 18px; }
+  .idx a {
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em;
+    color: var(--dim-2); text-decoration: none; padding: 3px 5px; border-radius: var(--r-1);
+    transition: color 140ms var(--ease), background 140ms var(--ease);
+  }
+  .idx a:hover { color: var(--text); background: var(--ink-2); }
+  .idx a[aria-current="true"] { color: var(--warn); }
+  @media (max-width: 940px) { .idx { display: none; } }
+
+  /* Tira de maduración: explica la métrica sin una línea de prosa, porque todo el
+     mundo sabe cómo se pone un plátano con el tiempo. */
+  .ripen {
+    display: flex; align-items: center; gap: 14px;
+    margin: 28px 0 0; padding-top: 22px; border-top: 1px solid var(--line);
+  }
+  .ripen-char { width: 44px; height: 86px; flex: none; }
+  .ripen-cap { min-width: 0; }
+  .ripen-name {
+    font-family: var(--font-mono); font-size: 12px; letter-spacing: .1em;
+    text-transform: uppercase; color: var(--ripe, var(--dim)); font-weight: 700;
+    transition: color 500ms var(--ease); display: block;
+  }
+  .ripen-why { font-size: 13px; color: var(--dim); margin: 3px 0 0; max-width: 34ch; }
+  .ripen-dots { display: flex; gap: 5px; margin-top: 8px; }
+  .ripen-dots i {
+    width: 5px; height: 5px; border-radius: 50%; background: var(--line-2);
+    transition: background 400ms var(--ease);
+  }
+  .ripen-dots i[data-on="1"] { background: var(--ripe, var(--dim)); }
+
+  /* Quien lee hasta el final se quedaba sin acción: instalar es la sección 07 y ya
+     pasó. No es un «¿listo para empezar?» —DESIGN.md lo prohíbe— sino el mismo botón
+     otra vez, donde hace falta. */
+  .cierre {
+    display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+    max-width: 1100px; margin: 0 auto; padding: 28px 24px;
+    border-top: 1px solid var(--line);
+  }
+  .cierre p { margin: 0; color: var(--dim); font-size: 14px; }
+
   main { max-width: 1100px; margin: 0 auto; padding: 0 24px 96px; }
 
   /* ── Hero: asimétrico. El tipo a la izquierda, el objeto focal desplazado. ── */
@@ -257,6 +302,10 @@
   <div class="bar-in">
     <span class="mark">Pings</span>
     <span class="mark-sub">latencia humana, medida</span>
+    <nav class="idx" aria-label="Secciones">
+      <a href="#s01">01</a><a href="#s02">02</a><a href="#s03">03</a><a href="#s04">04</a>
+      <a href="#s05">05</a><a href="#ajustes">06</a><a href="#instalar">07</a><a href="#s08">08</a>
+    </nav>
     <span class="bar-end">
       <code class="tok" id="tok">…</code>
       <a class="btn sm ghost" href="#instalar">Instalar</a>
@@ -276,6 +325,17 @@
         <a class="btn" href="#instalar">Instalar en 30 segundos</a>
         <button class="ghost" id="demo" type="button">Ver la escalada completa</button>
       </div>
+
+      <!-- La maduración explica la métrica sin una sola línea de prosa: todo el mundo
+           sabe cómo se pone un plátano con el tiempo. -->
+      <div class="ripen">
+        <div class="ripen-char" id="ripen-slot"></div>
+        <div class="ripen-cap">
+          <span class="ripen-name" id="ripen-name">verde</span>
+          <p class="ripen-why" id="ripen-why">Nadie te está esperando.</p>
+          <div class="ripen-dots" id="ripen-dots"><i></i><i></i><i></i><i></i></div>
+        </div>
+      </div>
     </div>
 
     <div class="stage">
@@ -284,27 +344,25 @@
     </div>
   </div>
 
-  <section>
+  <section id="s01">
     <div class="sec-n"><b>01</b> El problema</div>
     <div>
       <h2>La mitad de tus sesiones están paradas esperándote, y no sabes cuál.</h2>
-      <p class="soft">Trabajas con varias sesiones de Claude Code en paralelo. Algunas avanzan. Otras
-        llevan rato congeladas esperando que tú decidas algo: un permiso, una respuesta, un siguiente
-        paso. No sabes cuál, ni desde cuándo, ni cuál conviene matar.</p>
-      <p class="soft">Volver al teclado no es lo caro. Lo caro es <strong>reconstruir qué estaba
-        pasando en cada una</strong>.</p>
+      <p class="soft">Corres varias sesiones de Claude Code en paralelo. Unas avanzan; otras llevan
+        rato congeladas esperando que decidas algo. No sabes cuál, ni desde cuándo, ni cuál conviene
+        matar. Y volver al teclado no es lo caro: lo caro es <strong>reconstruir qué estaba pasando
+        en cada una</strong>.</p>
       <p>El argumento es aritmético: los agentes por humano suben, y la atención humana es fija.</p>
       <div class="mono">
         <i>precondición, medida:</i> 105.533 PRs de agentes en 59.412 repos<br>
         <i>fuente:</i> AgenticFlict, arXiv 2604.03551<br>
         <i>a cuántos otros les duele:</i> <b>N=1</b> — es nuestra propia experiencia, y no tenemos más
       </div>
-      <p class="hint">Ese N=1 está ahí a propósito. Que nadie mida la latencia humana en flujos
-        agénticos lo podemos defender. Que le duela a mucha gente, todavía no.</p>
+
     </div>
   </section>
 
-  <section>
+  <section id="s02">
     <div class="sec-n"><b>02</b> La métrica</div>
     <div>
       <h2>Agent-minutos, pesados por agentes realmente parados.</h2>
@@ -316,13 +374,12 @@ ranking      = costo × peso(motivo) × (1 + loops)
 <i>peso:</i>  permiso <b>3.0</b>   needs_input <b>2.5</b>   falló <b>2.0</b>   terminado <b>1.5</b>   idle <b>1.0</b></pre>
       <p class="soft">Si no hay eventos en ninguna sesión por 30 minutos, no estás distraído: estás
         fuera. La deuda se congela y el widget se calla. La intervención se dispara
-        <strong>cuando vuelves</strong>, que es cuando sirve.</p>
-      <p class="hint">Un horario laboral sería la abstracción equivocada. El almuerzo no está en el
-        calendario, y configurarlo mataría el onboarding.</p>
+        <strong>cuando vuelves</strong>, que es cuando sirve. Un horario laboral sería la abstracción
+        equivocada: el almuerzo no está en el calendario.</p>
     </div>
   </section>
 
-  <section>
+  <section id="s03">
     <div class="sec-n"><b>03</b> El dinero</div>
     <div>
       <h2>Esperar no quema tokens. Lo que se pierde es capacidad paralela.</h2>
@@ -340,7 +397,7 @@ ranking      = costo × peso(motivo) × (1 + loops)
     </div>
   </section>
 
-  <section>
+  <section id="s04">
     <div class="sec-n"><b>04</b> El mecanismo</div>
     <div>
       <h2>Un permiso congelado lo destrabas desde el celular.</h2>
@@ -356,7 +413,7 @@ ranking      = costo × peso(motivo) × (1 + loops)
     </div>
   </section>
 
-  <section>
+  <section id="s05">
     <div class="sec-n"><b>05</b> La garantía</div>
     <div>
       <h2>Pings nunca cuelga un agente.</h2>
@@ -376,23 +433,14 @@ ranking      = costo × peso(motivo) × (1 + loops)
     <div class="sec-n"><b>06</b> Hazlo tuyo</div>
     <div>
       <h2>Seis decisiones, cero cuentas.</h2>
-      <p class="soft">Todo esto vive en tu navegador y viaja en la URL del widget. El QR se genera
-        desde esa misma URL, así que <strong>el celular hereda tus ajustes sin login</strong>.</p>
+      <p class="soft">Vive en tu navegador y viaja en la URL del widget. El QR sale de esa misma URL,
+        así que <strong>el celular hereda tus ajustes sin login</strong>.</p>
 
       <div class="set">
         <div class="set-row">
           <div>
-            <h3>Tu nombre</h3>
-            <p>Va en cada hook. Con token de equipo es cómo se sabe a quién le toca decidir.</p>
-          </div>
-          <div class="set-ctl"><input type="text" id="s-who" placeholder="tu nombre" autocomplete="off"></div>
-        </div>
-
-        <div class="set-row">
-          <div>
             <h3>Cuánto vale tu hora</h3>
-            <p>Con esto se calcula la capacidad que dejaste parada. Ponlo en lo que cobras, no en lo
-              que te cuesta Claude.</p>
+            <p>Ponlo en lo que cobras, no en lo que te cuesta Claude.</p>
           </div>
           <div class="set-ctl">
             <span class="unit">$</span>
@@ -404,7 +452,7 @@ ranking      = costo × peso(motivo) × (1 + loops)
         <div class="set-row">
           <div>
             <h3>Mostrar el dinero</h3>
-            <p>Si el número en dólares distrae, apágalo. Los agent-minutos se siguen contando.</p>
+            <p>Apágalo y los agent-minutos se siguen contando.</p>
           </div>
           <div class="set-ctl"><button class="toggle" id="s-money" type="button" aria-pressed="true">dinero</button></div>
         </div>
@@ -474,9 +522,8 @@ ranking      = costo × peso(motivo) × (1 + loops)
         <div class="set-row">
           <div>
             <h3>El plátano</h3>
-            <p>Se pone verde, amarillo, manchado y puré según cuánto lleves debiendo. Apágalo y el
-              producto sigue sirviendo: la lista ordenada es la que hace el trabajo. Está acá para
-              que lo compruebes, no para que nos creas.</p>
+            <p>Apágalo y el producto sigue sirviendo: la lista ordenada es la que hace el trabajo.
+              Está acá para que lo compruebes, no para que nos creas.</p>
           </div>
           <div class="set-ctl"><button class="toggle" id="s-face" type="button" aria-pressed="true">plátano</button></div>
         </div>
@@ -484,8 +531,7 @@ ranking      = costo × peso(motivo) × (1 + loops)
         <div class="set-row">
           <div>
             <h3>La voz</h3>
-            <p>El widget puede decir en voz alta a cuál sesión volver. Útil si estás lejos de la
-              pantalla, molesto si hay alguien al lado.</p>
+            <p>Dice en voz alta a cuál sesión volver. Útil de lejos, molesto si hay alguien al lado.</p>
           </div>
           <div class="set-ctl"><button class="toggle" id="s-voice" type="button" aria-pressed="true">voz</button></div>
         </div>
@@ -500,12 +546,15 @@ ranking      = costo × peso(motivo) × (1 + loops)
       <h2>Treinta segundos, tres pasos.</h2>
 
       <div class="step">
-        <span class="step-n">Paso 1 · tu token</span>
+        <span class="step-n">Paso 1 · tu token y tu nombre</span>
         <div class="row">
           <code class="tok" id="tok2">…</code>
           <button class="ghost sm" id="nuevo" type="button">Generar otro</button>
           <button class="ghost sm" id="yatengo" type="button">Ya tengo uno</button>
+          <input type="text" id="s-who" placeholder="tu nombre" autocomplete="off" aria-label="Tu nombre">
         </div>
+        <p class="hint">El nombre entra dentro del bloque del paso 2, así que ponlo antes de copiar.
+          Con token de equipo es cómo se sabe a quién le toca decidir.</p>
         <!-- localStorage es POR ORIGEN, asi que abrir esto desde otro puerto o
              perfil acunaba un token nuevo EN SILENCIO y te dejaba mirando una cola
              vacia. Tiene que haber forma de decir "ya tengo uno". -->
@@ -516,10 +565,9 @@ ranking      = costo × peso(motivo) × (1 + loops)
         </div>
         <p class="hint" id="tok-err" hidden style="color:var(--red)">Ese token no tiene el
           formato correcto. Debe empezar por <code>p_</code> y traer 24 caracteres después.</p>
-        <p class="hint">Compártelo con quien trabaje contigo: el mismo token es la misma cola, y
-          cualquiera puede destrabar al agente del otro. Eso también significa que cualquiera con el
-          token aprueba comandos en tu máquina. Es intencional para dos socios y no escala a una
-          organización.</p>
+        <p class="hint">Compartir el token es compartir la cola: cualquiera con él destraba al agente
+          del otro, y también aprueba comandos en tu máquina. Es intencional para dos socios y no
+          escala a una organización.</p>
       </div>
 
       <div class="step">
@@ -552,20 +600,20 @@ ranking      = costo × peso(motivo) × (1 + loops)
     </div>
   </section>
 
-  <section>
+  <section id="s08">
     <div class="sec-n"><b>08</b> Lo que no hace</div>
     <div>
       <h2>Decir esto en voz alta sale más barato que descubrirlo instalando.</h2>
       <ul class="plain">
-        <li><strong>No te bloquea la máquina.</strong> El pings toma la ventana del widget y nada más.
-          Tu terminal sigue intacta y puedes cerrarlo. Esta versión apuesta a que ver el número basta.</li>
+        <li><strong>No te bloquea la máquina.</strong> Toma la ventana del widget y nada más: tu
+          terminal sigue intacta y puedes cerrarlo.</li>
         <li><strong>No minimiza los datos que recibe.</strong> El hook manda el payload nativo
           completo y no hay cliente local que lo filtre: en un <code class="tok">Write</code> eso
           incluye el contenido del archivo. Guardamos una fracción y no persistimos nada, pero
           recibir poco y guardar poco no son lo mismo. Detalle abajo.</li>
         <li><strong>No es un dashboard de PRs e issues.</strong> GitHub ya lo hace bien.</li>
-        <li><strong>No hay cuentas ni base de datos.</strong> El estado vive en memoria y cada
-          redeploy lo borra.</li>
+        <li><strong>No hay cuentas ni base de datos.</strong> El estado vive en memoria: cada redeploy
+          lo borra.</li>
         <li><strong>No hay un personaje por sesión.</strong> Hay uno solo, y representa la deuda, no a
           los agentes.</li>
         <li><strong>Solo funciona con Claude Code.</strong></li>
@@ -574,6 +622,11 @@ ranking      = costo × peso(motivo) × (1 + loops)
   </section>
 
 </main>
+
+<div class="cierre">
+  <a class="btn" href="#instalar">Instalar en 30 segundos</a>
+  <p>Tu token ya está generado arriba. Son tres pasos y no instalas nada.</p>
+</div>
 
 <footer>
   <p><strong>Nunca sale de tu máquina:</strong> el transcript (solo llega su ruta; el servidor no
@@ -839,6 +892,65 @@ sembrar().then(() => {
 });
 setInterval(sembrar, 30000);
 setInterval(pintarHoy, 10000);
+
+// ── Índice: marcar la sección visible ──────────────────────────────────────
+// IntersectionObserver puntual, no el scroll-reveal uniforme que DESIGN.md §5
+// prohíbe: acá no aparece nada, solo se resalta dónde estás.
+const enlacesIdx = [...document.querySelectorAll('.idx a')];
+const ioIdx = new IntersectionObserver((es) => {
+  for (const e of es) {
+    if (!e.isIntersecting) continue;
+    const id = '#' + e.target.id;
+    for (const a of enlacesIdx) {
+      a.setAttribute('aria-current', a.getAttribute('href') === id ? 'true' : 'false');
+    }
+  }
+}, { rootMargin: '-20% 0px -70% 0px' });
+for (const a of enlacesIdx) {
+  const sec = document.querySelector(a.getAttribute('href'));
+  if (sec) ioIdx.observe(sec);
+}
+</script>
+
+<!-- Módulo aparte porque character.js es ESM. Es el MISMO archivo que dibuja el
+     plátano del widget: si el personaje cambia, esto cambia con él y no hay una
+     segunda copia que se desincronice. -->
+<script type="module">
+import { mount, setLevel } from './character.js';
+
+const ESTADOS = [
+  { nivel: 'calm',  nombre: 'verde',    color: '#9fd356', why: 'Nadie te está esperando.' },
+  { nivel: 'nudge', nombre: 'amarillo', color: '#f5c518', why: 'Dos minutos de deuda. Ya hay alguien parado.' },
+  { nivel: 'angry', nombre: 'manchado', color: '#c8801f', why: 'Cinco minutos. Aquí es donde se te va la tarde.' },
+  { nivel: 'toll',  nombre: 'puré',     color: '#7a5128', why: 'Diez minutos. Ya no hay plátano que salvar.' },
+];
+
+const slot = document.getElementById('ripen-slot');
+const nom = document.getElementById('ripen-name');
+const why = document.getElementById('ripen-why');
+const dots = [...document.getElementById('ripen-dots').children];
+
+mount(slot);
+
+let i = 0;
+function pintarRipen() {
+  const e = ESTADOS[i];
+  setLevel(e.nivel);
+  slot.parentElement.style.setProperty('--ripe', e.color);
+  nom.textContent = e.nombre;
+  why.textContent = e.why;
+  dots.forEach((d, k) => d.setAttribute('data-on', k === i ? '1' : '0'));
+}
+
+// Con reduced-motion se queda quieto en `angry`: es el estado que mejor explica de
+// qué va el producto sin que nada se mueva.
+if (matchMedia('(prefers-reduced-motion: reduce)').matches) {
+  i = 2;
+  pintarRipen();
+} else {
+  pintarRipen();
+  setInterval(() => { i = (i + 1) % ESTADOS.length; pintarRipen(); }, 2200);
+}
 </script>
 </body>
 </html>

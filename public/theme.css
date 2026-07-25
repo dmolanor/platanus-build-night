@@ -31,7 +31,7 @@
 
   /* ── Los tres semánticos. Uno = un significado. No hay un cuarto. ───────── */
   --calm: #2fbf71;    /* nadie te espera */
-  --warn: #ffd23f;    /* atención · la marca · el pings */
+  --warn: #ffd23f;    /* atención · la marca · la deuda alta */
   --red: #ff4d4d;     /* alguien está bloqueado */
 
   /* ── Radios: chicos a propósito. Los radios grandes son el look burbuja. ── */
@@ -68,19 +68,22 @@ html[data-face="0"] .ball-slot { display: none; }
 
 /* 2 · Acumulado del día. settings.js inyecta este nodo; no existe en el markup de
    widget.html. Mono porque lo dice la máquina. */
+/* Medido a 380 px: iba a 8,7 px con contraste 2,35:1 — por debajo del mínimo AA de
+   4,5:1. Y usaba un gris distinto al del costo actual siendo el mismo tipo de dato,
+   así que los dos se leían como cosas sin relación. Ahora comparten gris y tamaño. */
 .hoy {
   font-family: var(--font-mono);
-  font-size: clamp(8.5px, 2.3vw, 11px);
+  font-size: clamp(10px, 2.75vw, 12px);
   letter-spacing: .06em;
   text-transform: uppercase;
-  color: var(--dim-2);
+  color: var(--dim);
   margin-top: 3px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .hoy b {
-  color: var(--dim);
+  color: var(--soft);
   font-weight: 700;
 }
 
@@ -100,10 +103,28 @@ html[data-face="0"] .ball-slot { display: none; }
    --ball, que es el token del personaje. --hot (el número de la deuda) y --red
    (permisos) siguen rojos: el rojo es la alarma, el plátano es el tiempo. */
 
-body[data-level="calm"]  { --ball: #9fd356; --ball-dark: #4a7a1e; }
-body[data-level="nudge"] { --ball: #f5c518; --ball-dark: #9a7400; }
-body[data-level="angry"] { --ball: #c8801f; --ball-dark: #6b3d08; }
-body[data-level="toll"]  { --ball: #7a5128; --ball-dark: #3c2410; }
+/* Se declara en DOS selectores a propósito:
+   · `body[data-level]` para que el aura y la burbuja del widget sigan al nivel.
+   · `.pings-char[data-level]` porque character.js pone el nivel en su propia raíz, y
+     así el personaje lleva su paleta a cualquier parte — incluida la landing, que no
+     carga style.css ni tiene data-level en el body. */
+body[data-level="calm"],  .pings-char[data-level="calm"]  { --ball: #9fd356; --ball-dark: #4a7a1e; }
+body[data-level="nudge"], .pings-char[data-level="nudge"] { --ball: #f5c518; --ball-dark: #9a7400; }
+body[data-level="angry"], .pings-char[data-level="angry"] { --ball: #c8801f; --ball-dark: #6b3d08; }
+body[data-level="toll"],  .pings-char[data-level="toll"]  { --ball: #7a5128; --ball-dark: #3c2410; }
+
+/* El slot NO es cuadrado, porque el plátano no lo es. Medido con `0 0 120 120` y un
+   slot de 42x42: se dibujaba a 16x34 px, el 30% del área. Con el viewBox recortado a
+   la tinta (character.js) y el slot en la misma proporción (54:105), se dibuja ~2,7x
+   más grande ocupando MENOS ancho de layout, así que el texto de al lado gana espacio
+   en vez de perderlo. */
+html .ball-slot {
+  width: clamp(32px, 8.9vw, 44px);
+  height: clamp(62px, 17.3vw, 86px);
+}
+@media (min-width: 560px) {
+  html .ball-slot { width: clamp(40px, 11vw, 54px); height: clamp(78px, 21.4vw, 105px); }
+}
 
 /* Cuerpo: trazo grueso, no contorno relleno. A 38 px un contorno con curvas finas
    se vuelve una mancha; un trazo de 28 sobrevive la escala. */
@@ -150,7 +171,151 @@ body[data-level="toll"]  { --ball: #7a5128; --ball-dark: #3c2410; }
 
 .pings-char[data-level="toll"] .ch-banana { opacity: 0; }
 .pings-char[data-level="toll"] .ch-mush { opacity: 1; }
-/* La cara baja al charco. Un puré no tiene ojos a media altura. */
-.pings-char[data-level="toll"] .ch-face { transform: translateY(9px) scale(.86); }
 /* Ya está en el suelo: no proyecta sombra aparte. */
 .pings-char[data-level="toll"] .ch-shadow { opacity: 0; }
+
+/* La cara baja al charco Y se recentra. En el plátano va sobre la barriga, que está
+   a la derecha del eje; el charco es simétrico, así que ahí la misma posición se ve
+   descentrada. */
+.pings-char[data-level="toll"] .ch-face { transform: translate(-9px, 8px) scale(.88); }
+
+/* ── El botón de voz: control, no cartel ────────────────────────────────────
+   «VOZ ON» gastaba 56 px del rincón más valioso de una ventana de 380x280 para decir
+   un estado que ya es audible: si la voz está encendida, la oyes. Es un control, no
+   una lectura de la máquina, y en mayúsculas a 10 px se leía como segundo.
+
+   PERO hay un tercer estado que sí necesita palabras: «toca para oír». Ahí el audio
+   está bloqueado por el navegador, no se oye nada, y nada más en la interfaz lo dice
+   (`body[data-audio]` existe en widget.html:240 y ningún CSS lo usaba). Un glifo no
+   alcanza para pedir una acción, así que ese estado conserva el texto y el amarillo.
+
+   El texto sigue en el DOM (`color: transparent`, no `display:none`) porque es el
+   nombre accesible del botón. Sin emoji: DESIGN.md §5 los prohíbe, y ♪ es un glifo
+   de texto en cualquier fuente. */
+body[data-audio="1"] #mute {
+  position: relative;
+  width: 24px;
+  padding: 2px 0;
+  color: transparent;
+  font-size: 0;
+}
+body[data-audio="1"] #mute::before {
+  content: "♪";
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 13px;
+  line-height: 1;
+  color: var(--dim);
+}
+body[data-audio="1"] #mute:hover::before { color: var(--text); }
+/* aria-pressed="true" es MUTEADO: así lo pinta paintMute(). El tachón es la señal. */
+body[data-audio="1"] #mute[aria-pressed="true"] { border-color: var(--line); }
+body[data-audio="1"] #mute[aria-pressed="true"]::after {
+  content: "";
+  position: absolute;
+  left: 4px; right: 4px; top: 50%;
+  height: 1px;
+  background: var(--dim);
+  transform: rotate(-34deg);
+}
+/* Audio bloqueado: el texto se queda, porque es lo único que pide la acción. */
+body:not([data-audio="1"]) #mute { color: var(--warn); border-color: #4a4530; }
+
+/* ── Costo actual ───────────────────────────────────────────────────────────
+   Medido a 380 px: iba a 9,5 px. El contraste pasaba AA pero el tamaño no se lee.
+   Comparte gris con `.hoy`, que es el mismo tipo de dato. */
+.debt-cost {
+  font-size: clamp(10.5px, 2.9vw, 13px);
+  color: var(--dim);
+}
+
+/* La unidad de la fila iba a 8,4 px. Es una etiqueta, pero 8,4 px no se lee. Al
+   subirla, «agent-min (4 agentes)» con el `nowrap` heredado ensanchaba la columna y
+   se cortaba contra el borde. Se deja envolver: la columna la mide la palabra más
+   larga, no la frase entera. */
+.sess-cost span {
+  font-size: clamp(9.5px, 2.5vw, 11px);
+  white-space: normal;
+  line-height: 1.25;
+}
+.sess-cost { max-width: 88px; }
+
+/* ── Estado por conversación ────────────────────────────────────────────────
+   El defecto: style.css pintaba `waiting` y `done` con var(--hot), que es el color
+   del nivel GLOBAL. Las cuatro filas salían del mismo color, y una sesión que TERMINÓ
+   —buenas noticias, solo hay que confirmar— se veía igual de roja que una congelada
+   pidiendo permiso. El color no decía nada de la fila.
+
+   Ahora cada fila lleva su propio estado, mapeado a los tres semánticos de DESIGN.md
+   §2 sin inventar un cuarto color. El motivo exacto lo sigue diciendo el texto de
+   `.sess-why`; el color solo carga el grado de urgencia, que es lo que permite triar
+   de un vistazo sin leer. */
+#sessions > li.sess { position: relative; }
+
+/* Espina en el margen izquierdo: una columna de colores que se tría de un vistazo,
+   sin agregar elementos ni mover el layout. */
+#sessions > li.sess::before {
+  content: "";
+  position: absolute;
+  left: -8px;
+  top: 8px;
+  bottom: 9px;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--st, transparent);
+  transition: background 400ms ease;
+}
+
+/* permiso 3.0 · falló 2.0 → hay un proceso real detenido */
+#sessions > li.sess[data-reason="permission"],
+#sessions > li.sess[data-reason="failed"]      { --st: var(--red); }
+/* needs_input 2.5 · idle 1.0 → te espera para decidir */
+#sessions > li.sess[data-reason="needs_input"],
+#sessions > li.sess[data-reason="idle"]        { --st: var(--warn); }
+/* terminado 1.5 → buenas noticias: confirma y cierra */
+#sessions > li.sess[data-reason="completed"]   { --st: var(--calm); }
+/* avanzando o sin señales → no requiere nada de ti */
+#sessions > li.sess[data-status="working"],
+#sessions > li.sess[data-status="stale"]       { --st: var(--dim-2); }
+
+/* El número y el rango siguen al estado de SU fila, no al nivel global. */
+#sessions > li.sess[data-status] .rank,
+#sessions > li.sess[data-status] .sess-cost b { color: var(--st, var(--dim)); }
+
+/* ── El plátano fuera del widget ────────────────────────────────────────────
+   La landing no carga style.css (700 líneas de CSS de widget que le pisarían el
+   body), así que el personaje no tendría con qué dibujarse. Esto es lo mínimo para
+   que renderice, TODO scopeado bajo `.ripen`: el widget no ve ni una de estas reglas,
+   así que no hay dos copias compitiendo por el mismo elemento. */
+.ripen .pings-char { position: relative; display: block; width: 100%; height: 100%; }
+.ripen .pings-char::before {
+  content: "";
+  position: absolute;
+  inset: -14%;
+  background: radial-gradient(circle at 50% 45%, var(--ball) 0%, transparent 68%);
+  border-radius: 50%;
+  opacity: .24;
+  transition: background 600ms var(--ease), opacity 600ms var(--ease);
+  pointer-events: none;
+}
+.ripen .pings-char svg { display: block; width: 100%; height: 100%; overflow: visible; }
+.ripen .ch-all, .ripen .ch-body-g, .ripen .ch-face,
+.ripen .ch-pupils, .ripen .ch-lids, .ripen .ch-brows {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.ripen .ch-eye { fill: #fff6e4; }
+.ripen .ch-pupil { fill: #121218; }
+.ripen .ch-lid { fill: var(--ball); transition: fill 600ms ease; }
+.ripen .ch-shadow { fill: #000; opacity: .22; }
+.ripen .ch-mouth { fill: none; stroke: #121218; stroke-width: 4; stroke-linecap: round; }
+.ripen .ch-brow {
+  stroke: var(--ball-dark); stroke-width: 5; stroke-linecap: round;
+  opacity: 0; transition: opacity 400ms ease, stroke 600ms ease;
+}
+.ripen .ch-lids { transform: translateY(-24px); transition: transform 400ms ease; }
+.ripen .pings-char[data-level="angry"] .ch-brow,
+.ripen .pings-char[data-level="toll"] .ch-brow { opacity: 1; }
+.ripen .pings-char[data-level="toll"] .ch-lids { transform: translateY(5px); }

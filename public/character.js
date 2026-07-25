@@ -63,7 +63,13 @@ export function mount(host) {
   root.className = 'pings-char';
   root.setAttribute('aria-hidden', 'true');
 
-  const svg = node('svg', { viewBox: '0 0 120 120', preserveAspectRatio: 'xMidYMid meet' });
+  // viewBox ajustado a la TINTA, no a un cuadrado cómodo. Medido: con `0 0 120 120`
+  // en un slot de 42x42 el plátano se dibujaba a 16x34 px — el 30% del área. La causa
+  // no era el slot: la tinta de los tres tramos del lomo ocupa x 28,5..75,6 de 120,
+  // así que el 61% del ancho estaba vacío y `preserveAspectRatio: meet` encajona una
+  // forma vertical en un cuadrado hasta que cabe por su lado largo. Recortando el
+  // viewBox se dibuja ~2,7x más grande Y ocupando menos ancho de layout que antes.
+  const svg = node('svg', { viewBox: '25 5 54 105', preserveAspectRatio: 'xMidYMid meet' });
 
   // Los párpados se recortan contra LOS OJOS, no contra el cuerpo. Es más correcto que
   // en la bola: un párpado es parte del ojo. Y de paso resuelve que un trazo no se
@@ -77,7 +83,7 @@ export function mount(host) {
   svg.appendChild(defs);
 
   const all = node('g', { class: 'ch-all' });
-  all.appendChild(node('ellipse', { class: 'ch-shadow', cx: 60, cy: 106, rx: 26, ry: 5 }));
+  all.appendChild(node('ellipse', { class: 'ch-shadow', cx: 52, cy: 105, rx: 19, ry: 4 }));
 
   const bodyG = node('g', { class: 'ch-body-g' });
 
@@ -113,7 +119,9 @@ export function mount(host) {
   const mush = node('g', { class: 'ch-mush' });
   mush.appendChild(node('path', {
     class: 'ch-mush-body',
-    d: 'M22 72 C26 57, 44 50, 60 52 C78 54, 96 60, 99 72 C102 83, 82 89, 60 89 C36 89, 19 83, 22 72 Z',
+    // Mismo ancho que el plátano: dos siluetas de anchos distintos dentro de un
+    // viewBox recortado se ven descentradas una respecto de la otra.
+    d: 'M28 70 C31 56, 42 47, 52 48 C63 49, 73 56, 75 68 C77 79, 64 86, 51 86 C36 86, 25 79, 28 70 Z',
   }));
   bodyG.appendChild(mush);
 
