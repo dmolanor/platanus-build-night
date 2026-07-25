@@ -554,6 +554,20 @@ async function ensurePreview() {
 async function ensureToken() {
   if (!token) token = (await (await fetch('/api/token/new')).json()).token;
   localStorage.setItem('pings_token', token);
+
+  // El token va también en la URL. `localStorage` es POR ORIGEN, así que abrir
+  // esto desde otro puerto, otro perfil u otra máquina te daba un token nuevo
+  // EN SILENCIO: cero sesiones aunque todo funcionara. Con el token en la URL el
+  // enlace es autosuficiente — se marca, se comparte, y sigue siendo la misma cola.
+  //
+  // El costo, asumido: queda visible en la barra de direcciones. Por eso para una
+  // demo proyectada se usa un token desechable, que ya es la recomendación.
+  if (new URLSearchParams(location.search).get('token') !== token) {
+    const q = new URLSearchParams(location.search);
+    q.set('token', token);
+    history.replaceState(null, '', `${location.pathname}?${q}${location.hash}`);
+  }
+
   $('#tok').textContent = token;
   $('#tok2').textContent = token;
   pintarQR();
