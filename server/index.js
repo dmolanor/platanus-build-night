@@ -11,7 +11,7 @@ import {
 } from './state.js';
 import { decidir } from './autopilot.js';
 import * as permits from './permits.js';
-import { aiBrief, aiAdvice, lastAiError } from './ai.js';
+import { aiBrief, aiAdvice, lastAiError, fallbackBrief } from './ai.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -19,23 +19,24 @@ const PORT = process.env.PORT || 7777;
 
 app.use(express.json({ limit: '2mb' }));
 
-// Un hook JAMÁS debe ver un error nuestro. Si el body viene raro, seguimos con {}.
-app.use((err, req, res, next) => {
-  if (err && req.path === '/hook') return res.status(200).end();
-  if (err) return res.status(200).json({ ok: false });
-  next();
-});
-
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
 // El token viaja en la query (es el mecanismo de onboarding: compartir la URL = compartir
 // la cola del equipo). También lo aceptamos por header, para poder migrar los hooks a
 // `headers: { Authorization }` sin tocar el servidor. Tradeoff asumido: queda en logs
 // y en el Referer. Mitigación: TTL de 2h y token rotable desde la landing.
+// Solo el formato que emite newToken(). Sin esto, cualquier cadena crea un tenant:
+// alguien usa `?token=diego` porque le resulta cómodo y ese token SÍ se adivina
+// —y quien lo adivine aprueba comandos en su máquina—, además de dejar crear
+// entradas ilimitadas con TTL de 12h en una instancia de 512MB.
+const FORMATO_TOKEN = /^p_[A-Za-z0-9_-]{24}$/;
+
 const tokenOf = (req) => {
   const auth = req.get('authorization');
-  if (auth?.startsWith('Bearer ')) return auth.slice(7).trim();
-  return String(req.query.token || '').trim();
+  const raw = auth?.startsWith('Bearer ')
+    ? auth.slice(7).trim()
+    : String(req.query.token || '').trim();
+  return FORMATO_TOKEN.test(raw) ? raw : '';
 };
 
 // ── Ingesta de hooks ─────────────────────────────────────────────────────────
@@ -134,8 +135,30 @@ app.get('/api/state', (req, res) => {
   res.json(snap);
 });
 
+// El brief es la única ruta que gasta dinero y no estaba autenticada: cualquiera
+// podía sembrar un token y pedir briefs en bucle contra nuestra API key.
+const briefUltimo = new Map();
+let briefEstaHora = { hora: 0, n: 0 };
+const BRIEF_COOLDOWN_MS = 10_000;
+const BRIEF_TOPE_HORA = 120;
+
 app.get('/api/brief', async (req, res) => {
-  res.json(await aiBrief(snapshot(tokenOf(req))));
+  const token = tokenOf(req);
+  if (!token) return res.status(404).json({ ok: false });
+
+  const ahora = Date.now();
+  const hora = Math.floor(ahora / 3_600_000);
+  if (briefEstaHora.hora !== hora) briefEstaHora = { hora, n: 0 };
+
+  const frio = ahora - (briefUltimo.get(token) || 0) < BRIEF_COOLDOWN_MS;
+  const topado = briefEstaHora.n >= BRIEF_TOPE_HORA;
+  const snap = snapshot(token);
+  // Con cooldown o tope, el fallback determinista responde igual de bien y gratis.
+  if (frio || topado) return res.json(fallbackBrief(snap));
+
+  briefUltimo.set(token, ahora);
+  briefEstaHora.n++;
+  res.json(await aiBrief(snap));
 });
 
 app.post('/api/toll/complete', (req, res) => {
@@ -151,7 +174,7 @@ app.post('/api/demo/start', (req, res) => {
   // sube ~0.2 agent-min por segundo real → nudge ~10s, angry ~25s, peaje ~50s.
   // Ese es el arco del pitch. Velocidades altas lo saltan entero.
   const speed = Number(req.query.speed || (ramp ? 2 : process.env.PEAJE_DEMO_SPEED || 60));
-  startDemo(tokenOf(req), speed, ramp);
+  if (!startDemo(tokenOf(req), speed, ramp)) return res.status(404).json({ ok: false });
   res.json({ ok: true, speed, ramp });
 });
 
@@ -166,6 +189,7 @@ app.post('/api/demo/stop', (req, res) => {
 // solo comprimidos — y el widget muestra "reloj 5x" para decirlo de frente.
 app.post('/api/clock', (req, res) => {
   const t = getToken(tokenOf(req));
+  if (!t) return res.status(404).json({ ok: false });
   const speed = Math.max(1, Math.min(60, Number(req.query.speed || 1)));
   t.demoSpeed = speed;
   res.json({ ok: true, speed });
@@ -236,15 +260,124 @@ app.get('/api/qr.svg', async (req, res) => {
 
 // Apagado por defecto: es lo único que ejecuta algo sin que mires.
 app.post('/api/autopilot', (req, res) => {
+  if (!tokenOf(req)) return res.status(404).json({ ok: false });
   const on = setAutopilot(tokenOf(req), req.query.on === '1');
   res.json({ ok: true, autopilot: on });
 });
 
+// ── Voz por ElevenLabs ───────────────────────────────────────────────────────
+// La key NUNCA sale del servidor. Sin key, con error, sin cuota o con demora
+// respondemos 204 y el widget cae al speechSynthesis del navegador: la demo no
+// depende de la red (CONTRACT.md §6 aplicado también a la voz).
+const voiceCache = new Map();          // texto → mp3. Las frases de nivel se repiten
+let lastVoiceError = null;
+
+// Rate limits. Esto gasta cuota real de un tercero y el token viaja en la query:
+// quien lo tenga puede pedir audio en bucle. Dos cinturones: ráfagas por token y
+// un presupuesto global de caracteres que protege la cuota de la cuenta entera.
+const VOICE_RPM = Number(process.env.ELEVENLABS_RPM || 20);
+const VOICE_CHARS_HOUR = Number(process.env.ELEVENLABS_CHARS_HOUR || 8000);
+const voiceHits = new Map();           // token → timestamps del último minuto
+let charWindow = { start: Date.now(), used: 0 };
+
+function voiceAllowed(token, chars) {
+  const now = Date.now();
+
+  if (now - charWindow.start > 3_600_000) charWindow = { start: now, used: 0 };
+  if (charWindow.used + chars > VOICE_CHARS_HOUR) return 'quota';
+
+  const hits = (voiceHits.get(token) || []).filter((t) => now - t < 60_000);
+  if (hits.length >= VOICE_RPM) { voiceHits.set(token, hits); return 'rate'; }
+
+  hits.push(now);
+  voiceHits.set(token, hits);
+  charWindow.used += chars;
+
+  if (voiceHits.size > 200) {
+    for (const [k, v] of voiceHits) if (!v.some((t) => now - t < 60_000)) voiceHits.delete(k);
+  }
+  return null;
+}
+
+app.get('/api/voice', async (req, res) => {
+  const token = tokenOf(req);
+  const text = String(req.query.text || '').trim().slice(0, 300);
+  const key = process.env.ELEVENLABS_API_KEY;
+  const voiceId = process.env.ELEVENLABS_VOICE_ID;
+  if (!token || !text || !key || !voiceId) return res.status(204).end();
+
+  // El caché va ANTES del rate limit: repetir una frase ya sintetizada no gasta cuota.
+  const hit = voiceCache.get(text);
+  if (hit) return res.type('audio/mpeg').set('Cache-Control', 'no-store').send(hit);
+
+  const blocked = voiceAllowed(token, text.length);
+  if (blocked) {
+    lastVoiceError = blocked === 'quota'
+      ? `presupuesto de ${VOICE_CHARS_HOUR} caracteres/hora agotado`
+      : `más de ${VOICE_RPM} peticiones/minuto para este token`;
+    return res.status(429).end();      // el widget lo lee como fallo → voz del navegador
+  }
+
+  try {
+    const r = await fetch(
+      `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}?output_format=mp3_44100_128`,
+      {
+        method: 'POST',
+        headers: { 'xi-api-key': key, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text,
+          model_id: process.env.ELEVENLABS_MODEL || 'eleven_flash_v2_5',
+          voice_settings: { stability: 0.4, similarity_boost: 0.8 },
+        }),
+        signal: AbortSignal.timeout(4000),   // el pitch no espera más
+      },
+    );
+    if (!r.ok) {
+      lastVoiceError = `${r.status} ${(await r.text()).slice(0, 160)}`;
+      return res.status(204).end();
+    }
+    const buf = Buffer.from(await r.arrayBuffer());
+    if (voiceCache.size > 60) voiceCache.clear();
+    voiceCache.set(text, buf);
+    lastVoiceError = null;
+    res.type('audio/mpeg').set('Cache-Control', 'no-store').send(buf);
+  } catch (e) {
+    lastVoiceError = String(e?.message || e).slice(0, 160);
+    res.status(204).end();
+  }
+});
+
 // Por qué la IA cayó al fallback. Para diagnosticar sin adivinar.
-app.get('/api/diag', (_req, res) => {
-  res.json({ apiKey: Boolean(process.env.ANTHROPIC_API_KEY), lastAiError });
+// Exige token: `lastAiError` es global entre tokens y los mensajes del SDK pueden
+// arrastrar fragmentos de la petición que lo provocó.
+app.get('/api/diag', (req, res) => {
+  if (!tokenOf(req)) return res.status(404).json({ ok: false });
+  res.json({
+    apiKey: Boolean(process.env.ANTHROPIC_API_KEY),
+    lastAiError,
+    voice: {
+      key: Boolean(process.env.ELEVENLABS_API_KEY),
+      voiceId: Boolean(process.env.ELEVENLABS_VOICE_ID),
+      model: process.env.ELEVENLABS_MODEL || 'eleven_flash_v2_5',
+      cached: voiceCache.size,
+      charsUsed: charWindow.used,
+      charsBudget: VOICE_CHARS_HOUR,
+      rpm: VOICE_RPM,
+      lastVoiceError,
+    },
+  });
 });
 
 app.get('/healthz', (_req, res) => res.type('text').send('ok'));
+
+// Un hook JAMÁS debe ver un error nuestro. Va al FINAL: Express solo enruta a
+// manejadores de error registrados DESPUÉS del handler que lanzó. Registrado
+// arriba solo atrapaba fallos de express.json(), y un cwd no-string devolvía un
+// 500 con el stack y las rutas absolutas del servidor dentro.
+app.use((err, req, res, _next) => {
+  if (!err) return res.status(404).end();
+  if (req.path === '/hook') return res.status(200).end();
+  res.status(200).json({ ok: false });
+});
 
 app.listen(PORT, () => console.log(`peaje escuchando en :${PORT}`));

@@ -32,6 +32,10 @@ export function newToken() {
 }
 
 export function getToken(token, { create = true } = {}) {
+  // Sin token válido no se crea tenant. `tokenOf()` en index.js devuelve '' para
+  // cualquier cosa que no tenga el formato de newToken(), así que este guardia
+  // cubre TODOS los endpoints de una vez, incluidos los que se agreguen después.
+  if (!token) return undefined;
   let t = TOKENS.get(token);
   if (!t && create) {
     t = { token, createdAt: Date.now(), lastEventAt: Date.now(), lastHumanAt: Date.now(),
@@ -64,6 +68,7 @@ export function logAuto(token, entry) {
 
 export function setAutopilot(token, on) {
   const t = getToken(token);
+  if (!t) return false;
   t.autopilot = Boolean(on);
   return t.autopilot;
 }
@@ -75,7 +80,7 @@ export function autopilotOn(token) {
 
 export function repoFromCwd(cwd) {
   if (!cwd) return 'sin-repo';
-  return cwd.replace(/[\\/]+$/, '').split(/[\\/]/).pop() || 'sin-repo';
+  return String(cwd).replace(/[\\/]+$/, '').split(/[\\/]/).pop() || 'sin-repo';
 }
 
 function getSession(t, sessionId, payload, who) {
@@ -457,6 +462,7 @@ export function resetDebt(token) {
 // salta el arco entero, que es justo el beat del pitch ("12... 30... 47").
 export function startDemo(token, speed, ramp = false) {
   const t = getToken(token);
+  if (!t) return null;
   t.demoSpeed = speed;
   t.sessions.clear();
   t.spoken.clear();
@@ -491,7 +497,7 @@ export function startDemo(token, speed, ramp = false) {
   // mientras no estabas, y sin auditoría decidir por alguien sería abuso.
   t.autoLog = [
     { at: now - 40_000, sessionId: 'demo-auth', who: 'diego', repo: 'buk-api',
-      tool: 'Bash', input: 'npm test', razon: 'comando de solo lectura' },
+      tool: 'Bash', input: 'git status', razon: 'comando de solo lectura' },
     { at: now - 95_000, sessionId: 'demo-ui', who: 'sofía', repo: 'buk-web',
       tool: 'Read', input: 'src/hooks/useAuth.ts', razon: 'Read no escribe nada' },
     { at: now - 160_000, sessionId: 'demo-auth', who: 'diego', repo: 'buk-api',

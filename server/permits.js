@@ -8,6 +8,7 @@
 // el prompt normal. Un timeout del hook es error NO bloqueante. Nunca colgamos un agente.
 
 import { randomBytes, timingSafeEqual } from 'node:crypto';
+import { repoFromCwd } from './state.js';
 
 const HOLD_MS = 85_000; // el hook tiene timeout: 90 → 5s de margen
 const PERMITS = new Map();
@@ -41,7 +42,9 @@ export function hold({ token, who, payload, res, onAdvice, collision = null }) {
     id,
     token,
     sessionId: payload.session_id,
-    repo: payload.cwd,
+    // Ruta relativa, no absoluta: el cwd completo lleva tu nombre de usuario
+    // del sistema, y esto viaja por SSE a todo el equipo y al modelo.
+    repo: repoFromCwd(payload.cwd),
     who: who || 'yo',
     tool: payload.tool_name || 'desconocida',
     input: input.command || input.file_path || JSON.stringify(input).slice(0, 300),

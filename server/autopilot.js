@@ -19,16 +19,22 @@ const SOLO_LECTURA = new Set(['Read', 'Glob', 'Grep', 'NotebookRead']);
 //   find  → `find . -delete` borra; `-exec` ejecuta
 //   rg    → `--pre` y `--hostname-bin` corren un binario externo
 //   jq    → innecesario aquí, y no vale la pena auditar sus flags
+//   npm/pnpm/yarn test → ejecutan `scripts.test` del package.json, que en un repo
+//                        clonado o en la rama de un PR NO lo escribiste tú
+//   tree               → `-o ARCHIVO` escribe
 const BASH_SEGURO = [
   'ls', 'pwd', 'cat', 'head', 'tail', 'wc', 'file', 'stat', 'du', 'df', 'echo',
   'which', 'whoami', 'date',
-  'git status', 'git log', 'git diff', 'git branch', 'git show', 'git remote',
+  'git status', 'git log', 'git diff', 'git show',
   'git rev-parse', 'git blame', 'git stash list',
-  'npm test', 'npm run test', 'npm ls', 'npm outdated',
-  'pnpm test', 'yarn test',
+  'npm ls', 'npm outdated',
   'node --check', 'node -v', 'npm -v', 'python --version',
-  'grep', 'tree',
+  'grep',
 ];
+
+// Solo en su forma EXACTA, sin argumentos. `git branch` a secas lista ramas;
+// `git branch -D main` borra, y `git remote set-url` secuestra tu próximo push.
+const BASH_EXACTO = new Set(['git branch', 'git remote']);
 
 // Cualquiera de estos convierte un comando "seguro" en un vehículo para otro:
 // `ls && rm -rf /`. Si aparece uno solo, no se aprueba.
@@ -36,14 +42,24 @@ const ENCADENA = /[;&|><`$(){}]|\bsudo\b|\bnpx\b|\bcurl\b|\bwget\b|\bxargs\b|\be
 
 // Defensa en profundidad: banderas que ejecutan o destruyen aunque el binario
 // esté en la lista. Si el binario permitido crece, esto sigue protegiendo.
+// `--output` escribe el resultado en la ruta que le des. `git log --output=~/.bashrc
+// --format=%s` escribe en tu shell bytes que controla quien haya escrito el asunto
+// de un commit — y esos metacaracteres viven en el historial, nunca en el comando.
 const BANDERA_PELIGROSA =
-  /(^|\s)-(-)?(exec|execdir|delete|force|pre|pre-glob|ext-diff|eval|upload-pack|receive-pack|hostname-bin|fprint\w*|fls|ok|okdir)\b|--(pre|ext-diff)=/i;
+  /(^|\s)-(-)?(exec|execdir|delete|force|pre|pre-glob|ext-diff|eval|output|upload-pack|receive-pack|hostname-bin|fprint\w*|fls|ok|okdir)\b|--(pre|ext-diff|output)=/i;
 
 function bashEsSeguro(cmd) {
   const c = String(cmd || '').trim();
   if (!c || c.length > 200) return false;
+
+  // PRIMERO, y cierra una clase entera: solo ASCII imprimible. En bash un salto de
+  // línea separa comandos igual que `;`, así que sin esto `cat README.md\nrm -rf ~`
+  // pasaba por "cat". También mata tabs, NBSP y homoglifos unicode de un golpe.
+  if (!/^[\x20-\x7E]+$/.test(c)) return false;
+
   if (ENCADENA.test(c)) return false;
   if (BANDERA_PELIGROSA.test(c)) return false;
+  if (BASH_EXACTO.has(c)) return true;
   return BASH_SEGURO.some((p) => c === p || c.startsWith(p + ' '));
 }
 
