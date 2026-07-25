@@ -17,7 +17,7 @@ const ADVICE_TIMEOUT_MS = 15_000;
 const BRIEF_TIMEOUT_MS = 10_000;
 
 // Por qué falló la última llamada. Solo el tipo, nunca contenido.
-export const lastAiError = { brief: null, advice: null };
+export const lastAiError = { brief: null, advice: null, match: null };
 
 function parseJson(response) {
   const text = response.content.find((b) => b.type === 'text')?.text;
@@ -248,5 +248,79 @@ export async function aiBrief(snap) {
   } catch (e) {
     lastAiError.brief = String(e && e.name || 'error') + ': ' + String(e && e.message || '').slice(0, 160);
     return fallback;
+  }
+}
+
+// ── Emparejamiento semántico con issues ──────────────────────────────────────
+// Lo determinista (una referencia `#123` o una rama `fix/123-…`) ya se resolvió
+// en github.js sin gastar un token. Acá llega solo lo que quedó suelto, y el
+// valor real no son los pares: es saber **qué issue no tiene a nadie encima**.
+
+const MATCH_SCHEMA = {
+  type: 'object',
+  properties: {
+    pares: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          sessionId: { type: 'string' },
+          numero: { type: 'integer' },
+          porque: { type: 'string', description: 'Máximo 10 palabras.' },
+        },
+        required: ['sessionId', 'numero', 'porque'],
+        additionalProperties: false,
+      },
+    },
+    sinNadie: {
+      type: 'array',
+      description: 'Números de issue que ninguna sesión está atendiendo.',
+      items: { type: 'integer' },
+    },
+  },
+  required: ['pares', 'sinNadie'],
+  additionalProperties: false,
+};
+
+export async function aiEmparejar(issues, sesiones) {
+  if (!client || !issues.length) return null;
+  try {
+    const response = await client.messages.create(
+      {
+        model: MODEL,
+        max_tokens: 4000,
+        output_config: { effort: 'low', format: { type: 'json_schema', schema: MATCH_SCHEMA } },
+        system:
+          'Empareja conversaciones de Claude Code con issues abiertos de GitHub.\n' +
+          'Empareja SOLO cuando el tema coincide de verdad: mismo componente, mismo bug, mismo ' +
+          'archivo. Dos cosas del mismo repo no son la misma tarea. Ante la duda, NO empareges — ' +
+          'un par falso es peor que un hueco, porque hace creer que alguien está en algo que nadie ' +
+          'está atendiendo.\n' +
+          'En "sinNadie" van los issues que ninguna sesión está trabajando. Ese es el dato que ' +
+          'importa: es trabajo que nadie empezó.\n' +
+          'Usa los sessionId y los números tal cual te los doy.',
+        messages: [
+          {
+            role: 'user',
+            content:
+              'ISSUES ABIERTOS:\n' +
+              issues.map((i) => `#${i.numero} [${i.repo}]${i.esPR ? ' (PR)' : ''} ${i.titulo}` +
+                (i.resumen ? `\n    ${i.resumen}` : '')).join('\n') +
+              '\n\nCONVERSACIONES EN CURSO:\n' +
+              (sesiones.length
+                ? sesiones.map((s) =>
+                    `${s.sessionId} · ${s.label}` +
+                    (s.branch ? ` · rama ${s.branch}` : '') +
+                    (s.lastPrompt ? `\n    le pidió: ${s.lastPrompt}` : '')).join('\n')
+                : '(ninguna)'),
+          },
+        ],
+      },
+      { timeout: 12_000 },
+    );
+    return parseJson(response);
+  } catch (e) {
+    lastAiError.match = String(e?.name || 'error') + ': ' + String(e?.message || '').slice(0, 120);
+    return null;
   }
 }

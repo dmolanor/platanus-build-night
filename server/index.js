@@ -11,8 +11,9 @@ import {
 } from './state.js';
 import { decidir } from './autopilot.js';
 import { frase, TONOS } from './tono.js';
+import * as github from './github.js';
 import * as permits from './permits.js';
-import { aiBrief, aiAdvice, lastAiError, fallbackBrief } from './ai.js';
+import { aiBrief, aiAdvice, aiEmparejar, lastAiError, fallbackBrief } from './ai.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -446,6 +447,76 @@ app.get('/api/voice', async (req, res) => {
     lastVoiceError = String(e?.message || e).slice(0, 160);
     res.status(204).end();
   }
+});
+
+// ── Issues: qué trabajo no tiene a nadie encima ──────────────────────────────
+// El PAT entra por el BODY, nunca por la query: Render y Cloudflare registran la
+// URL entera, y eso fue justo lo que marcó la auditoría. Vive solo en memoria y
+// no sale en ninguna respuesta.
+app.post('/api/github', (req, res) => {
+  const token = tokenOf(req);
+  if (!token) return res.status(404).json({ ok: false });
+  const out = github.configurar(token, {
+    pat: req.body?.pat,
+    repos: req.body?.repos,
+  });
+  res.json({ ok: true, ...out });
+});
+
+app.get('/api/github', (req, res) => {
+  const token = tokenOf(req);
+  if (!token) return res.status(404).json({ ok: false });
+  res.json(github.estado(token));
+});
+
+// Se consulta aparte del SSE a propósito: pegarle a GitHub una vez por segundo
+// por cada widget abierto sería absurdo. El TTL de 60s vive en github.js.
+app.get('/api/issues', async (req, res) => {
+  const token = tokenOf(req);
+  if (!token) return res.status(404).json({ ok: false });
+
+  const est = github.estado(token);
+  if (!est.conectado) return res.json({ conectado: false, pares: [], sinNadie: [] });
+
+  const items = await github.refrescar(token);
+  const snap = snapshot(token);
+  const vivas = snap.sessions.filter((x) => x.status !== 'stale');
+
+  // Lo determinista primero: una referencia `#123` o una rama `fix/123-…` no
+  // necesita modelo, y además nunca se equivoca.
+  const { pares, huerfanos, sesionesSinIssue } = github.emparejarPorNumero(items, vivas);
+
+  let sinNadie = huerfanos;
+  if (huerfanos.length) {
+    const ia = await aiEmparejar(huerfanos, sesionesSinIssue);
+    if (ia) {
+      const porId = new Map(vivas.map((x) => [x.sessionId, x]));
+      const porNum = new Map(huerfanos.map((i) => [i.numero, i]));
+      for (const p of ia.pares || []) {
+        const s = porId.get(p.sessionId);
+        const it = porNum.get(p.numero);
+        if (s && it) {
+          pares.push({ sessionId: s.sessionId, label: s.label, numero: it.numero,
+                       repo: it.repo, titulo: it.titulo, esPR: it.esPR,
+                       como: 'semejanza', porque: p.porque });
+        }
+      }
+      const emparejados = new Set(pares.map((p) => p.numero));
+      sinNadie = huerfanos.filter((i) => !emparejados.has(i.numero));
+    }
+  }
+
+  res.json({
+    conectado: true,
+    repos: est.repos,
+    error: est.error,
+    pares,
+    // Lo que importa: trabajo abierto que ninguna conversación está atendiendo.
+    sinNadie: sinNadie.map((i) => ({
+      numero: i.numero, repo: i.repo, titulo: i.titulo,
+      esPR: i.esPR, asignado: i.asignado, url: i.url,
+    })),
+  });
 });
 
 // Por qué la IA cayó al fallback. Para diagnosticar sin adivinar.
