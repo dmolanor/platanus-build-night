@@ -2,6 +2,7 @@
 // CONTRACT.md §1 y §4 son la fuente de verdad de umbrales y forma de los mensajes.
 
 import { randomBytes } from 'node:crypto';
+import { ramaDeSalida, ramaDeComando, refsDe, refsDeRama, anotar } from './refs.js';
 
 // 12h para que la deuda te espere de un día para otro. El estado vive en memoria,
 // así que un redeploy la borra igual: no prometemos más de lo que damos.
@@ -104,6 +105,8 @@ function getSession(t, sessionId, payload, who) {
       title: null,
       lastPrompt: null,
       model: null,
+      branch: null,
+      refs: new Set(),
       lastEventAt: Date.now(),
     };
     t.sessions.set(sessionId, s);
@@ -213,6 +216,7 @@ export function ingest(token, who, payload, kind) {
       // verdad te dice cuál es cuál es qué le pediste.
       if (payload.prompt) {
         s.lastPrompt = String(payload.prompt).replace(/\s+/g, ' ').trim().slice(0, 90);
+        anotar(s.refs, refsDe(payload.prompt));
       }
       markHuman(t);
       break;
@@ -225,6 +229,13 @@ export function ingest(token, who, payload, kind) {
       const repeats = s.recentTools.filter((x) => x === sig).length;
       s.loopCount = repeats >= 3 ? repeats - 2 : 0;
 
+      // La rama sale de la SALIDA del comando, que es donde git la imprime.
+      const rama = ramaDeSalida(payload.tool_result) || ramaDeComando(payload.tool_input?.command);
+      if (rama && rama !== s.branch) {
+        s.branch = rama;
+        anotar(s.refs, refsDeRama(rama));
+      }
+
       // Qué archivo acaba de tocar. Es lo que permite ver la colisión después.
       const surface = surfaceFromPayload(payload, s.repo);
       if (surface) {
@@ -236,7 +247,10 @@ export function ingest(token, who, payload, kind) {
 
     case 'Stop':
       setStatus(s, 'done', 'completed');
-      if (payload.last_assistant_message) s.lastMessage = String(payload.last_assistant_message).slice(0, 600);
+      if (payload.last_assistant_message) {
+        s.lastMessage = String(payload.last_assistant_message).slice(0, 600);
+        anotar(s.refs, refsDe(payload.last_assistant_message));
+      }
       break;
 
     // Los subagentes multiplican la deuda: si una sesión con 3 subagentes te espera,
@@ -349,6 +363,8 @@ export function snapshot(token) {
       label: s.title || s.lastPrompt || `sesión ${s.sessionId.slice(0, 6)}`,
       title: s.title || null,
       lastPrompt: s.lastPrompt || null,
+      branch: s.branch || null,
+      refs: [...(s.refs || [])],
       tasksOpen: s.tasksOpen || 0,
       tasksDone: s.tasksDone || 0,
       lastTask: s.lastTask || null,
@@ -501,7 +517,7 @@ export function startDemo(token, speed, ramp = false) {
     t.sessions.set(d.sessionId, {
       sessionId: d.sessionId, repo: d.repo, who: d.who, status: d.status, reason: d.reason,
       since: now - (ramp ? 0 : d.ageS * 1000), lastMessage: d.lastMessage, loopCount: d.loopCount,
-      subagents: d.subagents,
+      subagents: d.subagents, branch: d.branch || null, refs: new Set(d.refs || []),
       tasksDone: d.tareas ? d.tareas[0] : 0, tasksOpen: d.tareas ? d.tareas[1] : 0, lastTask: null,
       title: d.title, lastPrompt: null, model: null,
       recentTools: [], touched: new Map(d.touched || []), lastEventAt: now,
