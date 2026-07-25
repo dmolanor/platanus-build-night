@@ -162,6 +162,36 @@ body[data-offline="1"] .conn {
   font-variant-numeric: tabular-nums;
 }
 
+/* La bola habla. Mismo texto que la voz: si el audio falla, esto queda. */
+.bubble {
+  position: relative;
+  margin: 8px 0 2px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--ball-dark, #1d1e26);
+  border: 1px solid var(--ball, #3a3b45);
+  color: #fff;
+  font-size: clamp(11px, 3vw, 15px);
+  line-height: 1.3;
+  text-wrap: balance;
+  opacity: 0;
+  transform: translateY(-4px);
+  transition: opacity 300ms ease, transform 300ms ease;
+}
+.bubble.show { opacity: 1; transform: translateY(0); }
+.bubble[hidden] { display: none; }
+/* Piquito hacia la bola. */
+.bubble::before {
+  content: '';
+  position: absolute;
+  top: -5px; left: 22px;
+  width: 9px; height: 9px;
+  background: inherit;
+  border-left: 1px solid var(--ball, #3a3b45);
+  border-top: 1px solid var(--ball, #3a3b45);
+  transform: rotate(45deg);
+}
+
 .debt.bump { animation: bump 380ms ease-out; }
 @keyframes bump {
   0%   { transform: scale(1); }

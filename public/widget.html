@@ -28,6 +28,10 @@
       <div id="debt-cost" class="debt-cost" hidden></div>
     </div>
   </div>
+  <!-- Pinta EXACTAMENTE el mismo string que dice la voz. Un solo texto, dos canales:
+       así no hay nada que mantener sincronizado, y si el audio falla en el venue
+       la escalada sigue siendo legible. -->
+  <div id="bubble" class="bubble" hidden></div>
   <ul id="sessions" class="sessions"></ul>
   <p id="empty" class="empty" hidden>Nadie te está esperando. Estás al día.</p>
 </main>
@@ -170,6 +174,29 @@ function say(text) {
     u.pitch = 0.95;
     synth.speak(u);                            // autoplay bloqueado → falla en silencio
   } catch (_) {}
+}
+
+// Un solo texto, dos canales. `announce` deduplica ANTES de que say() marque el
+// texto como dicho, así que la burbuja y la voz salen juntas y una sola vez.
+let bubbleTimer = null;
+function announce(text) {
+  const t = typeof text === 'string' ? text.trim() : '';
+  if (!t || S.spoken.has(t)) return;
+  showBubble(t);
+  say(t);
+}
+
+function showBubble(text) {
+  const b = $('bubble');
+  b.textContent = text;
+  b.hidden = false;
+  void b.offsetWidth;            // reinicia la animación de entrada
+  b.classList.add('show');
+  clearTimeout(bubbleTimer);
+  bubbleTimer = setTimeout(() => {
+    b.classList.remove('show');
+    setTimeout(() => { if (!b.classList.contains('show')) b.hidden = true; }, 400);
+  }, 9000);
 }
 
 function paintMute() {
@@ -603,7 +630,7 @@ function render(snap) {
   }
   renderTollLock();
 
-  if (typeof snap.speak === 'string') say(snap.speak);
+  if (typeof snap.speak === 'string') announce(snap.speak);
 }
 
 // ── Stream ──────────────────────────────────────────────────────────────────
