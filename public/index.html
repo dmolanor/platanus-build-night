@@ -698,6 +698,9 @@ $('#usar-token').onclick = async () => {
 };
 
 $('#nuevo').onclick = async () => {
+  // Rotar de verdad: el viejo se revoca. Antes solo se generaba otro y el
+  // anterior seguía sirviendo durante 12 horas.
+  if (token) { try { await fetch(`/api/token?token=${encodeURIComponent(token)}`, { method: 'DELETE' }); } catch (_) {} }
   token = null;
   localStorage.removeItem('pings_token');
   await ensureToken();

@@ -67,6 +67,15 @@ export function logAuto(token, entry) {
   if (t.autoLog.length > 20) t.autoLog.pop();
 }
 
+// Revocación inmediata, sin cuentas. Un secreto que comparten tu máquina y el
+// servidor no se puede volver local — pero sí desechable: si se te fue en una
+// pantalla o en un QR, lo matas y todo lo que había debajo deja de existir.
+export function revocar(token) {
+  const habia = TOKENS.has(token);
+  TOKENS.delete(token);
+  return habia;
+}
+
 export function setAutopilot(token, on) {
   const t = getToken(token);
   if (!t) return false;

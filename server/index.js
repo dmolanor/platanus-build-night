@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import {
   ingest, snapshot, newToken, getToken, startDemo, stopDemo, resetDebt, levelFor,
   NUDGE_MS, surfaceFromPayload, collisionFor, repoFromCwd,
-  isAway, autopilotOn, setAutopilot, logAuto, markHuman,
+  isAway, autopilotOn, setAutopilot, logAuto, markHuman, revocar,
 } from './state.js';
 import { decidir } from './autopilot.js';
 import { frase, TONOS } from './tono.js';
@@ -447,6 +447,14 @@ app.get('/api/voice', async (req, res) => {
     lastVoiceError = String(e?.message || e).slice(0, 160);
     res.status(204).end();
   }
+});
+
+// Revocar. La auditoría lo marcó y faltaba: "rotar el token" generaba otro pero
+// el viejo seguía vivo 12 horas. Tres líneas, y sin necesidad de cuentas.
+app.delete('/api/token', (req, res) => {
+  const token = tokenOf(req);
+  if (!token) return res.status(404).json({ ok: false });
+  res.json({ ok: true, existia: revocar(token) });
 });
 
 // ── Emparejamiento: qué trabajo no tiene a nadie encima ─────────────────────
