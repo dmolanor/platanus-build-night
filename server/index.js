@@ -9,7 +9,7 @@ import {
   NUDGE_MS, surfaceFromPayload, collisionFor, repoFromCwd,
 } from './state.js';
 import * as permits from './permits.js';
-import { aiBrief, aiAdvice } from './ai.js';
+import { aiBrief, aiAdvice, lastAiError } from './ai.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -202,6 +202,11 @@ app.get('/api/qr.svg', async (req, res) => {
   } catch {
     res.status(500).end();
   }
+});
+
+// Por qué la IA cayó al fallback. Para diagnosticar sin adivinar.
+app.get('/api/diag', (_req, res) => {
+  res.json({ apiKey: Boolean(process.env.ANTHROPIC_API_KEY), lastAiError });
 });
 
 app.get('/healthz', (_req, res) => res.type('text').send('ok'));

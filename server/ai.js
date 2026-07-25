@@ -11,7 +11,13 @@ const client = process.env.ANTHROPIC_API_KEY ? new Anthropic() : null;
 // El permiso se retiene 85s, así que la recomendación puede tomarse su tiempo.
 // El brief NO: el humano está mirando la pantalla esperándolo.
 const ADVICE_TIMEOUT_MS = 15_000;
-const BRIEF_TIMEOUT_MS = 5_000;
+// El brief re-ordena leyendo cada sesión, así que tarda más que una respuesta
+// corta. El widget muestra "reconstruyendo…" mientras tanto, así que la espera es
+// legible; pasado esto, el fallback determinista entra sin que se note.
+const BRIEF_TIMEOUT_MS = 10_000;
+
+// Por qué falló la última llamada. Solo el tipo, nunca contenido.
+export const lastAiError = { brief: null, advice: null };
 
 function parseJson(response) {
   const text = response.content.find((b) => b.type === 'text')?.text;
@@ -116,7 +122,8 @@ export async function aiAdvice(permit, session, collision = null) {
     const out = parseJson(response);
     if (!out) return fallbackAdvice(permit);
     return { ...out, source: 'ia' };
-  } catch {
+  } catch (e) {
+    lastAiError.advice = String(e && e.name || 'error') + ': ' + String(e && e.message || '').slice(0, 160);
     return fallbackAdvice(permit);
   }
 }
@@ -174,7 +181,9 @@ Usa los sessionId tal cual.`;
 // es reconstruir qué estaba pasando en cada una.
 export async function aiBrief(snap) {
   const fallback = fallbackBrief(snap);
-  if (!client || !snap.sessions.length) return fallback;
+  if (!client) { lastAiError.brief = 'sin ANTHROPIC_API_KEY'; return fallback; }
+  if (!snap.sessions.length) return fallback;
+  lastAiError.brief = null;
   try {
     const ranked = snap.sessions
       .filter((s) => s.status === 'waiting' || s.status === 'done')
@@ -231,7 +240,8 @@ export async function aiBrief(snap) {
       });
     if (!items.length) return fallback;
     return { source: 'ia', headline: out.headline || fallback.headline, items };
-  } catch {
+  } catch (e) {
+    lastAiError.brief = String(e && e.name || 'error') + ': ' + String(e && e.message || '').slice(0, 160);
     return fallback;
   }
 }
